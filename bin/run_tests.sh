@@ -1,0 +1,18 @@
+#!/bin/bash
+
+# Run tests for fsynth using the local LuaRocks installation
+# This script first sources the environment setup and then runs busted
+
+# Get the directory where the script is located
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+PROJECT_ROOT="$( cd "${SCRIPT_DIR}/.." && pwd )"
+
+# Source the environment setup script
+source "${SCRIPT_DIR}/luapath.sh"
+
+# Set test mode environment variable to suppress log output
+export FSYNTH_TEST_MODE=1
+
+# Run the tests
+echo "Running tests for fsynth..."
+run_busted "$@"

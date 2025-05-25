@@ -19,10 +19,10 @@ dependencies = {
    "lua >= 5.1",
    "penlight >= 1.5.0",
    "log.lua >= 0.1.0",
-   "string-format-all >= 0.2.0"
+   "string-format-all >= 0.2.0", -- Package name uses hyphens, but require() uses dots
+   "busted >= 2.0.0"
 }
 test_dependencies = {
-   "busted >= 2.0.0"
 }
 build = {
    type = "builtin",
