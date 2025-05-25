@@ -171,7 +171,6 @@ The synthetic filesystem design enables thorough testing:
 
 1. UNIT TESTING
    - Test each operation type in isolation
-   - Mock actual filesystem calls
    - Verify proper checksum handling
    - Test various error conditions
 
@@ -180,12 +179,6 @@ The synthetic filesystem design enables thorough testing:
    - Verify correct execution order
    - Test rollback capabilities
    - Verify checksumming behavior
-
-3. MOCK FILESYSTEM
-   - Implement in-memory filesystem for testing
-   - Record all attempted operations
-   - Simulate various error conditions
-   - Test without touching the real filesystem
 
 Technology Stack
 --------------
