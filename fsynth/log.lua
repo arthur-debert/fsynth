@@ -7,6 +7,17 @@ local log = require("log")
 log.level = "info"  -- Default log level (info and above)
 log.outfile = "/var/tmp/lua-fsynth.log"  -- File output location
 
+-- Truncate the log file at every run
+local function truncate_log_file()
+  local fp = io.open(log.outfile, "w")
+  if fp then
+    fp:close()
+  end
+end
+
+-- Truncate the log file immediately when the module is loaded
+truncate_log_file()
+
 -- Create a separate logger instance for file logging with 'trace' level
 local file_log = setmetatable({}, {__index = log})
 file_log.level = "trace"  -- Log all levels to file

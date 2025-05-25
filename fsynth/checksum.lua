@@ -1,5 +1,7 @@
 -- Simple checksum module for fsynth
 local pl_file = require("pl.file")
+-- always use the log module, no prints
+local log = require("fsynth.log")
 
 local Checksum = {}
 
@@ -18,8 +20,11 @@ end
 -- @return string The hexadecimal representation of the checksum, or nil.
 -- @return string An error message if the file cannot be read or processed, otherwise nil.
 function Checksum.calculate_sha256(filepath)
+  log.debug("Calculating checksum for file: %s", filepath)
   if not filepath then
-    return nil, "Filepath cannot be nil"
+    local err_msg = "Filepath cannot be nil"
+    log.error(err_msg)
+    return nil, err_msg
   end
 
   local content, err = pl_file.read(filepath)
@@ -29,12 +34,13 @@ function Checksum.calculate_sha256(filepath)
     if err then
       err_msg = err_msg .. ": " .. tostring(err)
     end
+    log.error(err_msg)
     return nil, err_msg
   end
 
   -- Use our simple checksum function
   local hash_hex = simple_checksum(content)
-  
+  log.debug("Checksum calculated for %s: %s", filepath, hash_hex)
   return hash_hex
 end
 

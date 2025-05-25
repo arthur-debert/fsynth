@@ -3,6 +3,8 @@ local Checksum = require("fsynth.checksum")
 local pl_path = require("pl.path")
 local pl_file = require("pl.file")
 local pl_dir = require("pl.dir")
+-- always use the log module, no prints
+local log = require("fsynth.log")
 -- os.remove is standard
 
 ---------------------------------------------------------------------
@@ -60,6 +62,7 @@ function DeleteOperation:validate()
     local content
     local pcall_read_ok, pcall_read_val = pcall(function() content = pl_file.read(self.source) end)
     if not pcall_read_ok then
+      log.error("Failed to read file '" .. self.source .. "' for deletion: " .. tostring(pcall_read_val))
       return false, "Failed to read file '" .. self.source .. "' for deletion (pcall error): " .. tostring(pcall_read_val)
     end
     if content == nil and pcall_read_ok then 

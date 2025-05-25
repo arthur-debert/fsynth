@@ -1,4 +1,6 @@
 local Operation = require("fsynth.operation_base")
+-- always use the log module, no prints
+local log = require("fsynth.log")
 local pl_path = require("pl.path")
 local pl_dir = require("pl.dir")
 -- os.remove for undo, or pl_dir.rmdir
@@ -11,6 +13,7 @@ CreateDirectoryOperation.__index = CreateDirectoryOperation
 setmetatable(CreateDirectoryOperation, { __index = Operation }) -- Inherit from Operation
 
 function CreateDirectoryOperation.new(dir_path, options)
+  log.debug("Creating new CreateDirectoryOperation for: %s", dir_path)
   local self = Operation.new(nil, dir_path, options)
   setmetatable(self, CreateDirectoryOperation)
 
@@ -22,52 +25,70 @@ function CreateDirectoryOperation.new(dir_path, options)
 end
 
 function CreateDirectoryOperation:validate()
+  log.debug("Validating CreateDirectoryOperation for: %s", self.target)
   if not self.target then
-    return false, "Target directory path not specified for CreateDirectoryOperation"
+    local err_msg = "Target directory path not specified for CreateDirectoryOperation"
+    log.error(err_msg)
+    return false, err_msg
   end
 
   if pl_path.exists(self.target) then
     if pl_path.isfile(self.target) then
-      return false, "Target path '" .. self.target .. "' exists and is a file."
+      local err_msg = "Target path '" .. self.target .. "' exists and is a file."
+      log.error(err_msg)
+      return false, err_msg
     end
     if self.options.exclusive and pl_path.isdir(self.target) then
-      return false, "Directory '" .. self.target .. "' already exists and operation is exclusive."
+      local err_msg = "Directory '" .. self.target .. "' already exists and operation is exclusive."
+      log.error(err_msg)
+      return false, err_msg
     end
   else 
     if not self.options.create_parent_dirs then
       local parent_dir = pl_path.dirname(self.target)
       if parent_dir and parent_dir ~= "" and parent_dir ~= "." and not pl_path.isdir(parent_dir) then
-        return false, "Parent directory of '" .. self.target .. "' does not exist and create_parent_dirs is false."
+        local err_msg = "Parent directory of '" .. self.target .. "' does not exist and create_parent_dirs is false."
+        log.error(err_msg)
+        return false, err_msg
       end
     end
   end
+  log.debug("Directory operation validation successful for: %s", self.target)
   return true
 end
 
 function CreateDirectoryOperation:execute()
+  log.info("Executing CreateDirectoryOperation for: %s", self.target)
   local ok, err_msg
   local path_existed_as_dir_before_op = pl_path.isdir(self.target)
 
   if path_existed_as_dir_before_op and not self.options.exclusive then
+    log.info("Directory already exists, no need to create: %s", self.target)
     self.dir_actually_created_by_this_op = false
     return true
   end
 
   if pl_path.exists(self.target) and not path_existed_as_dir_before_op then -- e.g. it's a file
-    return false, "Target path '" .. self.target .. "' exists and is not a directory."
+    err_msg = "Target path '" .. self.target .. "' exists and is not a directory."
+    log.error(err_msg)
+    return false, err_msg
   end
 
   local creation_success_flag -- Penlight's direct success (true) or failure (nil)
   local pcall_success, pcall_err_or_val 
 
   if self.options.create_parent_dirs then
+    log.debug("Creating directory with parent directories: %s", self.target)
     pcall_success, pcall_err_or_val = pcall(function() return pl_dir.makepath(self.target) end)
   else
+    log.debug("Creating directory without parent directories: %s", self.target)
     pcall_success, pcall_err_or_val = pcall(function() return pl_dir.makedir(self.target) end)
   end
 
   if not pcall_success then
-    return false, "Failed to create directory '" .. self.target .. "' (pcall error): " .. tostring(pcall_err_or_val)
+    err_msg = "Failed to create directory '" .. self.target .. "' (pcall error): " .. tostring(pcall_err_or_val)
+    log.error(err_msg)
+    return false, err_msg
   end
   
   -- If pcall succeeded, pcall_err_or_val is the first return value of the called function
@@ -89,28 +110,40 @@ function CreateDirectoryOperation:execute()
   end
 
   if not pcall_success then
-      return false, "Failed to create directory '" .. self.target .. "' (pcall error): " .. tostring(creation_success_flag) -- error is in 2nd arg of pcall
+      err_msg = "Failed to create directory '" .. self.target .. "' (pcall error): " .. tostring(creation_success_flag)
+      log.error(err_msg)
+      return false, err_msg
   end
   if not creation_success_flag then -- Penlight function returned nil, msg
-      return false, "Failed to create directory '" .. self.target .. "': " .. (err_msg or "unknown Penlight error")
+      err_msg = "Failed to create directory '" .. self.target .. "': " .. (err_msg or "unknown Penlight error")
+      log.error(err_msg)
+      return false, err_msg
   end
 
   -- If we reached here, directory operation was successful
   if not path_existed_as_dir_before_op then
       self.dir_actually_created_by_this_op = true
+      log.info("Directory successfully created: %s", self.target)
+  else
+      log.info("Directory already existed: %s", self.target)
   end
   
   return true
 end
 
 function CreateDirectoryOperation:undo()
+  log.info("Undoing CreateDirectoryOperation for: %s", self.target)
   if not self.dir_actually_created_by_this_op then
-    return true, "Undo: Directory '" .. self.target .. "' was not marked as created by this operation."
+    local msg = "Undo: Directory '" .. self.target .. "' was not marked as created by this operation."
+    log.info(msg)
+    return true, msg
   end
 
   if not pl_path.isdir(self.target) then
     self.dir_actually_created_by_this_op = false 
-    return false, "Undo: Target '" .. self.target .. "' is not a directory or does not exist."
+    local err_msg = "Undo: Target '" .. self.target .. "' is not a directory or does not exist."
+    log.warn(err_msg)
+    return false, err_msg
   end
 
   -- Safety Check: Directory must be empty
@@ -124,7 +157,9 @@ function CreateDirectoryOperation:undo()
   -- if ok_dirs is true, err_dirs_or_data is the actual table of dirs
 
   if (err_files_or_data and next(err_files_or_data)) or (err_dirs_or_data and next(err_dirs_or_data)) then
-    return false, "Undo: Directory '" .. self.target .. "' is not empty, cannot safely undo."
+    local err_msg = "Undo: Directory '" .. self.target .. "' is not empty, cannot safely undo."
+    log.warn(err_msg)
+    return false, err_msg
   end
 
   -- Remove the directory
@@ -132,12 +167,17 @@ function CreateDirectoryOperation:undo()
   local rmdir_pcall_ok, rmdir_pcall_val1, rmdir_pcall_val2 = pcall(pl_dir.rmdir, self.target)
 
   if not rmdir_pcall_ok then
-    return false, "Undo: Failed to remove directory '" .. self.target .. "' (pcall error): " .. tostring(rmdir_pcall_val1)
+    local err_msg = "Undo: Failed to remove directory '" .. self.target .. "' (pcall error): " .. tostring(rmdir_pcall_val1)
+    log.error(err_msg)
+    return false, err_msg
   end
   if not rmdir_pcall_val1 then -- Penlight rmdir returned nil, msg
-     return false, "Undo: Failed to remove directory '" .. self.target .. "': " .. (rmdir_pcall_val2 or "unknown Penlight error")
+     local err_msg = "Undo: Failed to remove directory '" .. self.target .. "': " .. (rmdir_pcall_val2 or "unknown Penlight error")
+     log.error(err_msg)
+     return false, err_msg
   end
 
+  log.info("Directory successfully removed during undo: %s", self.target)
   self.dir_actually_created_by_this_op = false 
   return true
 end

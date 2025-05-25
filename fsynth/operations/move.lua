@@ -3,6 +3,8 @@ local Checksum = require("fsynth.checksum")
 local pl_path = require("pl.path")
 local pl_file = require("pl.file") -- Not directly used for move, but good to have for consistency if needed later
 local pl_dir = require("pl.dir")
+-- always use the log module, no prints
+local log = require("fsynth.log")
 
 ---------------------------------------------------------------------
 -- MoveOperation
@@ -87,9 +89,11 @@ function MoveOperation:execute()
       local parent_create_ok, parent_create_err
       pcall_success, parent_create_ok, parent_create_err = pcall(pl_dir.makepath, parent_dir)
       if not pcall_success then
+        log.error("Failed to create parent directories for '" .. self.target .. "' (pcall error): " .. tostring(parent_create_ok))
         return false, "Failed to create parent directories for '" .. self.target .. "' (pcall error): " .. tostring(parent_create_ok)
       end
       if not parent_create_ok then
+        log.error("Failed to create parent directories for '" .. self.target .. "': " .. (parent_create_err or "unknown Penlight error"))
         return false, "Failed to create parent directories for '" .. self.target .. "': " .. (parent_create_err or "unknown Penlight error")
       end
     end

@@ -103,12 +103,21 @@ Implementation Details
    - Clear warning/error when limit is reached
 
 4. ERROR HANDLING
-   - Detailed error messages with context
-   - Error classification (fatal vs. non-fatal)
-   - Option to continue on non-fatal errors
-   - Logging of all operations and errors
-
-5. EXECUTION MODELS
+   |    - Detailed error messages with context
+   |    - Error classification (fatal vs. non-fatal)
+   |    - Option to continue on non-fatal errors
+   |    - Logging of all operations and errors
+   |
+   | 5. LOGGING
+   |    - Uses the `log` library for all logging operations
+   |    - Log file is automatically truncated at startup
+   |    - Default log level is "info" for console output
+   |    - All levels (trace through fatal) are logged to file
+   |    - Log file is stored at "/var/tmp/lua-fsynth.log"
+   |    - Log entries include timestamp, source file, and line number
+   |    - Always use the log module instead of print statements
+   |
+   | 6. EXECUTION MODELS
    - Standard: Execute operations in order, stopping on first error
    - Validate-first: Validate all operations before executing any
    - Best-effort: Try all operations, collecting errors

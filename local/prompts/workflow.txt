@@ -1,0 +1,9 @@
+Creaet a github ci workflow that runs the busted test suite.
+
+1. make sure that install deps through luarocks
+2. everything but the actual code checkout + busted execution should be cached
+3. this means that, aside cache retrival, this should execute in a couple of
+   seconds
+4. feel free to commit and use the gh cli to make sure this workflow
+5. runs every commit, every branch
+6. commit your work , push and verify it

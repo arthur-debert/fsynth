@@ -155,7 +155,7 @@ function CopyFileOperation:execute()
         "Failed to calculate checksum for copied file '" .. self.target .. "': " .. tostring(checksum_target_err)
   end
   self.checksum_data.target_checksum = new_target_checksum
-  print("Target checksum stored:", self.checksum_data.target_checksum)
+  log.info("Target checksum stored: %s", self.checksum_data.target_checksum)
 
   return true
 end
@@ -167,7 +167,8 @@ function CopyFileOperation:undo()
     -- If the target file doesn't exist, it might have been deleted by other means.
     -- Or, if we had a backup mechanism, we would restore it here.
     -- For now, if it's not there, the "undo" (deletion) is effectively done or not applicable.
-    return true, "Target file '" .. self.target .. "' does not exist, undo operation is a no-op or file already removed."
+    return true, "Target file '" .. self.target ..
+      "' does not exist, undo operation is a no-op or file already removed."
   end
 
   if not self.checksum_data.target_checksum then
