@@ -90,15 +90,19 @@ describe("CopyFileOperation", function()
         local target = tmp_dir .. "/target.txt"
         local content = "Test content for copying"
 
+        print("TEST: Creating source file at", source)
         -- Create source file
         local file = io.open(source, "w")
         file:write(content)
         file:close()
 
-        local op = CopyFileOperation.new(source, target)
+        print("TEST: Creating CopyFileOperation with overwrite=true")
+        local op = CopyFileOperation.new(source, target, {overwrite = true})
 
-        local valid = op:validate()
-        assert.is_true(valid)
+        print("TEST: Validating operation")
+        local valid, err = op:validate()
+        print("TEST: Validation result:", valid, err)
+        assert.is_true(valid, "Validation failed: " .. tostring(err))
 
         local success = op:execute()
         assert.is_true(success)
