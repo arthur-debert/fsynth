@@ -5,6 +5,7 @@ local log = require("fsynth.log")
 local pl_path = require("pl.path")
 local pl_file = require("pl.file")
 local pl_dir = require("pl.dir")
+local fmt = require("string-format-all")
 -- os.remove is a standard Lua function
 
 ---------------------------------------------------------------------
@@ -41,7 +42,7 @@ function CreateFileOperation:validate()
   if not self.options.create_parent_dirs then
     local parent_dir = pl_path.dirname(self.target)
     if parent_dir and parent_dir ~= "" and parent_dir ~= "." and not pl_path.isdir(parent_dir) then
-      local err_msg = "Parent directory '" .. parent_dir .. "' does not exist and create_parent_dirs is false"
+      local err_msg = fmt("Parent directory '{}' does not exist and create_parent_dirs is false", parent_dir)
       log.error(err_msg)
       return false, err_msg
     end
@@ -61,7 +62,7 @@ function CreateFileOperation:execute()
       log.debug("Creating parent directory: %s", parent_dir)
       ok, err_msg = pcall(function() pl_dir.makepath(parent_dir) end)
       if not ok then
-        err_msg = "Failed to create parent directories for '" .. self.target .. "': " .. tostring(err_msg)
+        err_msg = fmt("Failed to create parent directories for '{}': {}", self.target, tostring(err_msg))
         log.error(err_msg)
         return false, err_msg
       end
@@ -73,7 +74,7 @@ function CreateFileOperation:execute()
   log.debug("Writing file: %s (%d bytes)", self.target, #self.options.content)
   ok, err_msg = pcall(function() pl_file.write(self.target, self.options.content) end)
   if not ok then
-    err_msg = "Failed to write file '" .. self.target .. "': " .. tostring(err_msg)
+    err_msg = fmt("Failed to write file '{}': {}", self.target, tostring(err_msg))
     log.error(err_msg)
     return false, err_msg
   end
@@ -86,7 +87,7 @@ function CreateFileOperation:execute()
     -- Try to clean up by deleting the possibly partially written file
     log.warn("Cleaning up partially written file: %s", self.target)
     pcall(function() os.remove(self.target) end)
-    err_msg = "Failed to calculate checksum for created file '" .. self.target .. "': " .. tostring(checksum_err)
+    err_msg = fmt("Failed to calculate checksum for created file '{}': {}", self.target, tostring(checksum_err))
     log.error(err_msg)
     return false, err_msg
   end
@@ -103,13 +104,13 @@ function CreateFileOperation:undo()
   if not pl_path.exists(self.target) then
     -- If the file doesn't exist, undo might be considered successful or a no-op.
     -- For robustness, let's indicate it wasn't there to begin with.
-    local msg = "File '" .. self.target .. "' did not exist, undo operation is a no-op."
+    local msg = fmt("File '{}' did not exist, undo operation is a no-op.", self.target)
     log.info(msg)
     return true, msg
   end
 
   if not self.checksum_data.target_checksum then
-    err_msg = "No checksum recorded for '" .. self.target .. "' at creation, cannot safely undo."
+    err_msg = fmt("No checksum recorded for '{}' at creation, cannot safely undo.", self.target)
     log.error(err_msg)
     return false, err_msg
   end
@@ -117,14 +118,14 @@ function CreateFileOperation:undo()
   log.debug("Verifying checksum before undo for: %s", self.target)
   local current_checksum, checksum_err = Checksum.calculate_sha256(self.target)
   if not current_checksum then
-    err_msg = "Failed to calculate checksum for '" .. self.target .. "' during undo: " .. tostring(checksum_err)
+    err_msg = fmt("Failed to calculate checksum for '{}' during undo: {}", self.target, tostring(checksum_err))
     log.error(err_msg)
     return false, err_msg
   end
 
   if current_checksum ~= self.checksum_data.target_checksum then
-    err_msg = "File content of '" .. self.target .. "' has changed since creation " ..
-              "(checksum mismatch), cannot safely undo."
+    err_msg = fmt("File content of '{}' has changed since creation " ..
+               "(checksum mismatch), cannot safely undo.", self.target)
     log.warn(err_msg)
     return false, err_msg
   end
@@ -133,7 +134,7 @@ function CreateFileOperation:undo()
   log.debug("Deleting file for undo: %s", self.target)
   ok, err_msg = pcall(function() os.remove(self.target) end)
   if not ok then
-    err_msg = "Failed to delete file '" .. self.target .. "' during undo: " .. tostring(err_msg)
+    err_msg = fmt("Failed to delete file '{}' during undo: {}", self.target, tostring(err_msg))
     log.error(err_msg)
     return false, err_msg
   end

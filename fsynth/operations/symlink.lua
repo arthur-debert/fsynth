@@ -4,6 +4,7 @@ local log = require("fsynth.log")
 local pl_path = require("pl.path")
 local pl_file = require("pl.file") -- Assuming pl.file.symlink exists
 local pl_dir = require("pl.dir")
+local fmt = require("string-format-all")
 -- os.remove is a standard Lua function
 
 ---------------------------------------------------------------------
@@ -43,12 +44,12 @@ function SymlinkOperation:validate()
   -- Link Path (self.target) Validation
   if pl_path.exists(self.target) then
     if not self.options.overwrite then
-      local err_msg = "Link path '" .. self.target .. "' exists and overwrite is false."
+      local err_msg = fmt("Link path '{}' exists and overwrite is false.", self.target)
       log.error(err_msg)
       return false, err_msg
     end
     if pl_path.isdir(self.target) then
-      local err_msg = "Cannot overwrite a directory '" .. self.target .. "' with a symlink."
+      local err_msg = fmt("Cannot overwrite a directory '{}' with a symlink.", self.target)
       log.error(err_msg)
       return false, err_msg
     end
@@ -59,8 +60,8 @@ function SymlinkOperation:validate()
     if not self.options.create_parent_dirs then
       local parent_dir = pl_path.dirname(self.target)
       if parent_dir and parent_dir ~= "" and parent_dir ~= "." and not pl_path.isdir(parent_dir) then
-        local err_msg = "Parent directory of link path '" .. parent_dir ..
-                        "' does not exist and create_parent_dirs is false."
+        local err_msg = fmt("Parent directory of link path '{}' does not exist and create_parent_dirs is false.",
+                           parent_dir)
         log.error(err_msg)
         return false, err_msg
       end
@@ -84,7 +85,7 @@ function SymlinkOperation:execute()
       log.debug("Creating parent directory for symlink: %s", parent_dir)
       ok, err_msg = pcall(function() pl_dir.makepath(parent_dir) end)
       if not ok then
-        err_msg = "Failed to create parent directories for '" .. self.target .. "': " .. tostring(err_msg)
+        err_msg = fmt("Failed to create parent directories for '{}': {}", self.target, tostring(err_msg))
         log.error(err_msg)
         return false, err_msg
       end
@@ -100,14 +101,15 @@ function SymlinkOperation:execute()
       log.debug("Removing existing item for overwrite: %s", self.target)
       local removed_existing, remove_err = pcall(function() os.remove(self.target) end)
       if not removed_existing then
-        err_msg = "Failed to remove existing item at link path '" .. self.target .. "': " .. tostring(remove_err)
+        err_msg = fmt("Failed to remove existing item at link path '{}': {}", 
+                     self.target, tostring(remove_err))
         log.error(err_msg)
         return false, err_msg
       end
       log.info("Existing item removed for overwrite: %s", self.target)
     else
       -- This case should ideally be caught by validate(), but as a safeguard:
-      err_msg = "Link path '" .. self.target .. "' exists and overwrite is false (execute safeguard)."
+      err_msg = fmt("Link path '{}' exists and overwrite is false (execute safeguard).", self.target)
       log.error(err_msg)
       return false, err_msg
     end
@@ -119,17 +121,19 @@ function SymlinkOperation:execute()
   ok, err_msg = pcall(function() return pl_file.symlink(self.source, self.target) end)
   if not ok then
     -- pcall failed, err_msg is the error string from Lua
-    err_msg = "Failed to create symlink from '" .. self.target .. "' to '" .. self.source .. "': " .. tostring(err_msg)
+    err_msg = fmt("Failed to create symlink from '{}' to '{}': {}", 
+                 self.target, self.source, tostring(err_msg))
     log.error(err_msg)
     return false, err_msg
   end
   -- pcall succeeded, err_msg is the first return value of pl_file.symlink
   -- Penlight's pl.file.symlink returns (true) on success or (nil, message) on error.
   if err_msg == nil or type(err_msg) == "string" then -- This means pl_file.symlink itself returned (nil, msg)
-      local actual_err_msg = err_msg or "unknown error from pl_file.symlink"
-      err_msg = "Failed to create symlink from '" .. self.target .. "' to '" .. self.source .. "': " .. actual_err_msg
-      log.error(err_msg)
-      return false, err_msg
+    local actual_err_msg = err_msg or "unknown error from pl_file.symlink"
+    err_msg = fmt("Failed to create symlink from '{}' to '{}': {}", 
+                 self.target, self.source, actual_err_msg)
+    log.error(err_msg)
+    return false, err_msg
   end
   -- If err_msg is true, it means pl_file.symlink succeeded.
   log.info("Symlink successfully created from %s to %s", self.target, self.source)
@@ -146,13 +150,13 @@ function SymlinkOperation:undo()
   end
 
   if not pl_path.exists(self.target) then
-    local err_msg = "Undo: Symlink at '" .. self.target .. "' does not exist, cannot remove."
+    local err_msg = fmt("Undo: Symlink at '{}' does not exist, cannot remove.", self.target)
     log.warn(err_msg)
     return false, err_msg
   end
 
   if not pl_path.islink(self.target) then
-    local err_msg = "Undo: Item at '" .. self.target .. "' is not a symlink, cannot safely undo."
+    local err_msg = fmt("Undo: Item at '{}' is not a symlink, cannot safely undo.", self.target)
     log.warn(err_msg)
     return false, err_msg
   end
@@ -160,7 +164,7 @@ function SymlinkOperation:undo()
   log.debug("Removing symlink for undo: %s", self.target)
   local ok, err_msg = pcall(function() os.remove(self.target) end)
   if not ok then
-    err_msg = "Undo: Failed to delete symlink '" .. self.target .. "': " .. tostring(err_msg)
+    err_msg = fmt("Undo: Failed to delete symlink '{}': {}", self.target, tostring(err_msg))
     log.error(err_msg)
     return false, err_msg
   end

@@ -1,8 +1,8 @@
 FSYNTH: SYNTHETIC FILESYSTEM FOR ISOLATED OPERATIONS
 ===================================================
 
-Purpose and Rationale
---------------------
+1. Purpose and Rationale
+-------------------------
 
 Fsynth provides a synthetic filesystem abstraction to isolate and queue 
 filesystem operations for batch execution. The primary goal is to separate 
@@ -19,42 +19,41 @@ designed for simple, reliable file operation batching with appropriate
 safeguards.
 
 
-Core Design Principles
----------------------
+2. Core Design Principles
+--------------------------
 
-1. PURE PLANNING, ISOLATED EXECUTION
+a. PURE PLANNING, ISOLATED EXECUTION
    Build an operation queue without making any actual filesystem changes,
    then execute the queue in a controlled, isolated part of the codebase.
-
-2. CONTENT VERIFICATION
+b. CONTENT VERIFICATION
    Each file operation should checksum source and target files where
    appropriate. This enables:
    - Verification that the source file hasn't changed since planning
    - Detection of target file changes before overwriting
    - Optional backing down if content has changed
 
-3. SAFE DIRECTORY HANDLING
+c. SAFE DIRECTORY HANDLING
    When processing directories:
    - Use an accumulator to track processed items
    - Implement a configurable maximum to prevent processing huge directories
    - Provide a clear mechanism to skip/include dotfiles
 
-4. ROLLBACK CAPABILITY
+d. ROLLBACK CAPABILITY
    While not promising full transaction semantics, fsynth should attempt
    reasonable rollback of failed operation batches.
 
-5. IMMUTABILITY AND FUNCTIONAL APPROACH
+e. IMMUTABILITY AND FUNCTIONAL APPROACH
    Once an operation is created, its parameters should be immutable.
    This helps with debugging and ensures operations don't unexpectedly
    change behavior between creation and execution.
 
 
-API Design
----------
+3. API Design
+-------------
 
 The API follows the Command pattern with a queue-based approach.
 
-1. OPERATION INTERFACE [1]
+a. OPERATION INTERFACE [1]
    Each operation encapsulates a specific filesystem action with a standard
    interface including:
    - execute(): performs the operation
@@ -62,11 +61,11 @@ The API follows the Command pattern with a queue-based approach.
    - checksum(): generates or verifies checksums
    - undo(): reverses the operation (when possible)
 
-2. QUEUE MANAGEMENT [2]
+b. QUEUE MANAGEMENT [2]
    The system uses an efficient queue implementation with O(1) enqueue/dequeue
    operations.
 
-3. BASIC OPERATIONS
+c. BASIC OPERATIONS
    Core operations include:
    - CopyFile: Copy a file with checksum verification
    - SymlinkFile: Create a symlink
@@ -76,33 +75,34 @@ The API follows the Command pattern with a queue-based approach.
    - MoveFile: Move a file with checksum verification
    - ChmodFile: Change file permissions
 
-4. PROCESSOR INTERFACE [3]
+d. PROCESSOR INTERFACE [3]
    The processor executes the operation queue with proper error handling
    and optional rollback.
 
 
-Implementation Details
+
+4. Implementation Details
 --------------------
 
-1. OPERATION REPRESENTATION
+a. OPERATION REPRESENTATION
    Each operation is a Lua table with methods (using metatables) that include:
    - Common fields: source, target, options, checksum_data
    - Operation-specific fields as needed
    - Standard methods matching the operation interface
 
-2. CHECKSUMMING
+b. CHECKSUMMING
    - Use SHA-256 for robust checksumming
    - Store checksums for both source and target files
    - Options to compare checksums before operations
    - Options to bail out if checksums don't match expectations
 
-3. DIRECTORY HANDLING
+c. DIRECTORY HANDLING
    - Implement iteration with item counting
    - Configurable max_items parameter (default reasonably low, ~1000)
    - Store current count in an accumulator object
    - Clear warning/error when limit is reached
 
-4. ERROR HANDLING
+d. ERROR HANDLING
    |    - Detailed error messages with context
    |    - Error classification (fatal vs. non-fatal)
    |    - Option to continue on non-fatal errors
@@ -124,50 +124,57 @@ Implementation Details
    - Transactional: Attempt rollback of completed operations on failure
 
 
-Integration with Existing Systems
+
+5. Integration with Existing Systems
 -------------------------------
 
 Fsynth is designed to work with Penlight for path handling and filesystem
 operations. Key integration points:
 
-1. Leveraging Penlight's path functions for normalization, joining, etc.
-2. Using pl.dir for directory operations when appropriate
-3. Wrapping pl.file functions for file operations
-4. Using Penlight's utility functions where helpful
+a. Leveraging Penlight's path functions for normalization, joining, etc.
+b. Using pl.dir for directory operations when appropriate
+c. Wrapping pl.file functions for file operations
+d. Using Penlight's utility functions where helpful
 
 The library will be tested with Busted, using mocks to isolate filesystem
 operations for unit testing.
 
 
-Testing Approach
---------------
 
-1. UNIT TESTING
+6. Testing 
+----------
+
+a. UNIT TESTING
    - Test each operation type in isolation
    - Test validation, execution, and rollback separately
    - Test queue management independently
 
-2. INTEGRATION TESTING
+b. INTEGRATION TESTING
    - Test full execution flows with controlled test directories
    - Verify proper handling of edge cases (permissions, etc.)
    - Test with various execution models
 
+c. Testing Commands
 
-Dependencies and LuaRocks
-------------------------
+    luarocks test 
+    busted 
+
+
+7. Dependencies and LuaRocks
+-----------------------------
 
 Fsynth uses LuaRocks for dependency management. Always use LuaRocks to install, update, or remove dependencies to ensure consistent behavior across development and deployment environments.
 
-1. REQUIRED DEPENDENCIES
+a. REQUIRED DEPENDENCIES
    - lua >= 5.1
-   - penlight >= 1.5.0
-   - log.lua >= 0.1.0
-   - string-format-all >= 0.2.0
+   - penlight >= 1.5.0 -> all base file ops
+   - log.lua >= 0.1.0 -> no print statements, always use
+   - string-format-all >= 0.2.0 -> all string formatting should use
 
-2. TEST DEPENDENCIES
+b. TEST DEPENDENCIES
    - busted >= 2.0.0
 
-3. COMMON LUAROCKS COMMANDS
+c. COMMON LUAROCKS COMMANDS
 
    # Installing all dependencies from the rockspec file
    luarocks install --local
