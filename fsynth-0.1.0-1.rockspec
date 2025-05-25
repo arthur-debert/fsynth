@@ -18,28 +18,30 @@ description = {
 }
 dependencies = {
    "lua >= 5.1",
-   "penlight >= 1.5.0"
+   "penlight >= 1.5.0",
+   "log >= 0.1.0"
 }
 test_dependencies = {
    "busted >= 2.0.0"
 }
 build = {
-   type = "builtin",
-   modules = {
-      ["fsynth.init"] = "fsynth/init.lua",
-      ["fsynth.operation_base"] = "fsynth/operation_base.lua",
-      ["fsynth.processor"] = "fsynth/processor.lua",
-      ["fsynth.queue"] = "fsynth/queue.lua",
-      ["fsynth.checksum"] = "fsynth/checksum.lua",
-      ["fsynth.utils"] = "fsynth/utils.lua",
-      ["fsynth.operations.copy_file"] = "fsynth/operations/copy_file.lua",
-      ["fsynth.operations.create_directory"] = "fsynth/operations/create_directory.lua",
-      ["fsynth.operations.create_file"] = "fsynth/operations/create_file.lua",
-      ["fsynth.operations.delete"] = "fsynth/operations/delete.lua",
-      ["fsynth.operations.move"] = "fsynth/operations/move.lua",
-      ["fsynth.operations.symlink"] = "fsynth/operations/symlink.lua"
-   },
-   copy_directories = {
+   build = {
+      type = "builtin",
+      modules = {
+         ["fsynth.init"] = "fsynth/init.lua",
+         ["fsynth.operation_base"] = "fsynth/operation_base.lua",
+         ["fsynth.processor"] = "fsynth/processor.lua",
+         ["fsynth.queue"] = "fsynth/queue.lua",
+         ["fsynth.checksum"] = "fsynth/checksum.lua",
+         ["fsynth.utils"] = "fsynth/utils.lua",
+         ["fsynth.log"] = "fsynth/log.lua",
+         ["fsynth.operations.copy_file"] = "fsynth/operations/copy_file.lua",
+         ["fsynth.operations.create_directory"] = "fsynth/operations/create_directory.lua",
+         ["fsynth.operations.create_file"] = "fsynth/operations/create_file.lua",
+         ["fsynth.operations.delete"] = "fsynth/operations/delete.lua",
+         ["fsynth.operations.move"] = "fsynth/operations/move.lua",
+         ["fsynth.operations.symlink"] = "fsynth/operations/symlink.lua"
+      },
       "docs"
    }
 }
