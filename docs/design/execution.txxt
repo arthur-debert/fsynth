@@ -1,0 +1,229 @@
+dodot's architectured
+                functional rolling over merged confs
+
+
+Functional, as much as possible
+
+    dodot's execution fits very well with functional programming, as there are
+    no UI, no deeply embedded hierachical domain of objects nor similar third
+    party libraries to leverage.
+
+    Hence, we will use a functionalish structure, that is, as functional as
+    reasonable, given that all we do is create side effects on user's systems.
+
+    We'll achieve this by using pure functions, and , instead of making changes
+    to a user's system as the program runs, we'll build a list of file system
+    operations to be ran. That is, the program will plan and accumulate all
+    that needs to be done, then do it in a isolated, small part of the code. As
+    long as we can keep the execution of this list bug free, we can have a high
+    degree of confidence on developing and testing functionally 99% of the
+    application.  More on this bellow.
+
+
+Execution Overview
+
+    Let's walkthrough what happens when a user runs: 
+
+        dodot deploy 
+
+    Since the command does not specify a pack, we'll deploy the entire dotfiles
+    root. The first step is to find where that is. 
+
+    Once we know where that it: 
+        - Get a list of pack candidates
+        - Validates these , which are now packs
+        - Deploy each pack
+
+    Both validating packs and which handlers to run in each map very well to
+    filters of files. 
+
+
+    dodot features configuration, as in behavior specification on several
+    levels: 
+
+        - The ones in dodot's core (say the list of available handlers)
+        - DOTFILES_ROOT configuration (same as user config)
+        - Pack configuration (a .dodot.toml file inside it.)
+        - Handler configuration (content in said file)
+
+    As expected newer configurations override previous ones, that is a pack
+    configuration will win over a user, which would win over dodot's defaults.
+
+    Hence, at various times we will collect configuration and merge it with the
+    current one, giving precedence to the new one.  
+
+
+    By running the filtering of dirs to pack candidates, from pack candidates
+    to packs , and packs handlers ,we'll end up with a hierarchical list of
+    handlers to run.
+
+    Once we have that, we'll "run" all these handlers but, instead of changing
+    the file system , we'll generate a big list of small fs operations.
+
+    Up to now we can keep the program fully functional, and hence, easy to test
+    and reason about.
+
+    We finally process the operations queue and thus finish our execution.
+
+    **Error Handling during Execution:**
+    Should an error occur while the `fs-operation-runner` is executing operations for a specific pack,
+    the operations for that particular pack will be halted. However, `dodot` will attempt to
+    continue processing subsequent packs in a best-effort manner. Critical system-level errors,
+    such as "disk out of space," may halt the entire process. Detailed logging of all operations
+    and any errors encountered will be crucial for diagnostics.
+
+    **Rollback and Recovery:**
+    A deliberate design choice is to not implement an automatic rollback or "undeploy" feature.
+    Attempting to perfectly reverse all possible file system operations and handler actions
+    (e.g., script executions) is complex and can lead to a false sense of security, as not all
+    actions are truly reversible. Instead, `dodot` will focus on providing:
+        - Detailed logging of every change made.
+        - Temporary backups of any files that are deleted or moved during an operation.
+    This information will empower users to manually revert changes if necessary.
+
+
+    Now we have a good introduction to the various parts that make dodot work.
+
+    - dotfiles-root finder
+    - pack-candiates-searcher
+    - pack-verifiers
+    - configuration-fetcher
+    - configuration-merger
+    - handler-fecher
+    - handler-merger
+    - handler-runner
+    - fs-operation-runner
+
+    Outside the obvious flow, from a user's request we have: 
+
+    - handler-config-loader: loads the handlers definitions.
+
+    This list is of dúbios utility, as the dotfiles root finder is a three line
+    thing, while the handler runner gets way more complicated.
+
+    Lets talk about the components in more detail .
+
+
+Dotfiles Root Finder
+
+    The simplest of things, it will look for a environment variable or the
+    current working directory. Returns the path to the dotfiles root.
+
+Pack Candidate Searcher
+
+    Given such path, this piece will generate a list of possible packs.  
+    It performs only minor, very crude checking. Thins like has to be a dir, we
+    have to have read aces to it's contents and it can't be empty.
+
+
+Master looper
+
+    Responsible for building the complete list of handlers to run. IT will run
+    the pack verifiers and end up with a handler queue to run.
+
+Pack Verifier
+
+    REcenving a validated path, from a file system perspecitive, the verifieer
+    will ensure that from the application logic, this is a pack. 
+
+    The first thing it does, is to check for a pack configuration file
+    (.dodot.toml). If one is there, it loads it. 
+
+    If the config request this to be excluded, that's it. That's all the
+    processing this will receive. We''ll log it's exclusion but go no further,
+    not even listing it's files. 
+
+    The reasons for this are: 
+        - Any processing done on a excluded package is gone to waste.
+        - Like it or not, we're about doing stuff with your files. Why risk any
+          bugs or issues at all?  
+        - Match user's expectations. Even listing the directory would break
+          this, as the user has specified: don't go here.
+
+    IF there is no exclusion request, it will then list the contents. If there
+    are no files besides the config one, there is nothing to do here as well.
+
+    At this point, we process all the data (path, config, contents) into a
+    pack_data object, which has reach information and will be the first
+    relevant data structure we'll use. 
+
+Handler Verifier
+
+    Each pack will loop through the list of available handlers. These will
+    check the pack_data , and decide if their trigger is there. If so, they
+    will return as active for that package.
+
+
+    When all packs have ran through handler verifiers we are left with a
+    hierachical list of handlers to run.
+
+Handler Runner
+
+    With the handler queue to be ran, it will execute: 
+
+        - setup operations: (like creating the directory in which shell aliases
+          will be linked from) and so on. These are a collective setup, not a
+          per handler thing.
+        - run each handler, wich returns an operations list.
+        - perform closing operations for group handlers.
+
+    Rebeber that up to now, we're not changing anything on disk. We have a
+    operations queue to be performed to a user's system, but nothing has
+    happens yet.
+
+    If we're running in dry-mode, for example, we can just output this and
+    we're done. 
+
+Operation Executioner
+
+    The piece to run the operation queue, which hopefully results in the user's
+    wishes.
+
+
+
+On Abstract FS Operations
+
+    Isolating all side efffect and keeping the code base 99% free of dealing
+    with actual file system has significant wins. Much easier to test, safer as
+    it constricts the risker parts of the code to a small isolated set of
+    primitives, dry runs for free and more. 
+
+    It does have drawbacks too. We can ignore the minor ones for now, and focus
+    on the big one: interdependence. 
+
+    Let me ilustrate. Say that operation 42 archives a directory. If operation
+    30 removed that directory, there is nothing for 42 to do.  That is, if
+    trans pack operations are dependent , everything will break.
+
+    This is no small detail. Looking at the use case in detail, the truth is
+    this will seldomly happen. The order of operations within a single pack's generated
+    list is maintained, but strict ordering guarantees across different packs are not
+    provided. When it does occur, the end result is very similar to running side
+    effects at collection time. We are mindful of the trade-off, but confident on
+    the benefit of the overall approach.
+
+    **Conflict Resolution:**
+    In the rare event that multiple packs attempt to manage the exact same target path
+    (e.g., two packs try to symlink different source files to `~/.config/app/config`),
+    the principle is that the last pack processed will "win," meaning its operation
+    will overwrite any previous ones for that specific path. However, well-structured
+    dotfiles and pack organization should generally prevent such direct conflicts.
+
+
+Triggers
+
+    Trigers are functions that, given a pack_data, will run the merged config
+    and check if that content trigger that function. IF they do, the trigger
+    will filter the data triggered, that is , affected.   
+
+
+Handlers
+
+    Handler will be given the pack_data, with the trigger and config, and will
+    return the sythetic operations to be performed.
+
+
+
+
+
+
