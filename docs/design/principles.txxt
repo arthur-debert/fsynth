@@ -1,0 +1,269 @@
+                            dodot: 
+              Manage your dotfiles like a butterfly
+
+
+dodot is an open source dotfiles (configuration) manager.
+This document explains the design and decisions behind its implementation.
+
+
+The Problem Definition
+
+    Configuration files are relevant and extensive enough to be source controlled. Setting up new 
+    machines or environments easily, being able to revert or examine history, disaster resilience, 
+    and even running small variations in parallel are all valuable capabilities.
+
+    That in itself is obvious and trivial—just keep the files in a repository. The issue is that 
+    configuration files, to be useful, must be deployed - that is, they must be locatable at certain 
+    path(s). That is the core definition for configuration management: a tool to give you centralized 
+    control over your dotfiles that are easy to deploy and propagate any changes.
+
+
+Yet Another One?
+
+    Yes, unfortunately. While many dotfile managers exist, dodot takes a unique approach focused on 
+    simplicity and directness.
+
+
+dodot's Approach
+
+    The core principle: versioning is for version control. Users should edit their configs as they've 
+    always done with no publishing/updating step.
+
+    The other key aspect is simplicity: dodot is stateless and does things in a naive and 
+    straightforward manner.
+
+    This is probably as straightforward as it gets, and yet most managers differ significantly from 
+    this approach.
+
+    The key is the heavy usage of symlinks. In the simple case of a config being a file, that's it.
+
+    In the case of shell customizations, it does get a bit trickier, as many parts will customize 
+    the shell.
+
+    What dodot does is to create a directory that symlinks these various files in an ordered manner. 
+    When you edit any of these, there is no extra step, and yet they remain under source control. 
+    There are some caveats and edge cases to this, but in practice it works remarkably well.
+
+
+How dodot Works: Packs and Triggers
+
+    dodot works by activating packs, that is deploying its configurations. Packs are a loose structure; 
+    any directory under your DOTFILES_ROOT is a pack.
+
+    That means you can organize packs any way you see fit: by software, stack, themes, or environments.
+
+    dodot will process files inside packs in one of two ways:
+
+        1. The file matches the naming conventions for special files, making it a trigger.
+        Triggers activate specific handlers for deployment.
+        
+        2. Otherwise, the file will be symlinked to the ~/ (or ~/.config) directory.
+        Directories will be symlinked as well.
+
+    This means that in dodot, you organize things in directories. What needs to be symlinked can just 
+    be there, and what needs special handling has to follow the naming conventions (a .dodot file can 
+    alter this behavior in case you want to override it).
+
+    This gives users great flexibility with minimum effort or lock-in. Most of the time, the way dodot 
+    works will work just as well for any other system or your personal scripts.
+
+
+Handlers
+
+    dodot's role is to process the files in your packs, handling them usefully. The various 
+    capabilities for these come from the different handlers.
+
+    Each handler knows how to deploy specific files in a pack, and are run by the presence of triggers.
+
+    Here are the handlers:
+
+        link:
+            This is the default handler, it will symlink any file or directory
+            that is not a trigger.
+
+        bin:
+            Adds the <pack>/bin directory to your PATH.
+
+        Brewfile:
+            This will run a brewfile, installing the packages listed in it.
+            It will also install any cask packages.
+
+        alias:
+            This will add any aliases in the file to your shell.
+            It will also add any functions in the file to your shell.
+
+        profile(.sh):
+            This will add any profile in the file to your shell.
+            It will also add any functions in the file to your shell.
+
+        setup(.sh):
+            In case your pack has a setup.sh file, it will be run on first
+            access.
+
+        shell-completions:
+            This will add any shell completions in the file to your shell.
+            It will also add any functions in the file to your shell.
+
+    Each handler gets triggered by a file or directory with the specified names. For the shell related 
+    ones, any shell extensions will work as well, such as .sh, .bash, or .zsh.
+
+
+Deployments, Not Installs
+
+    A key aspect of dodot is the radical simplicity of the design. In a way, dotfiles managers are 
+    somewhat like package managers, that can install, list, remove, and update configurations instead 
+    of packages.
+
+    Package managers are really, really hard to get right, and we've got a few that work pretty well. 
+    It is a core principle not to walk the slippery slope of package-managers with dodot.
+
+    There are no installs. There are no uninstalls, no upgrades. There is no in-disk data neither 
+    conflicts from its divergence to the files on disk or deployed.
+
+    This design does involve compromises, but it makes everything much simpler, much easier to reason 
+    about, use, and debug.
+
+        dodot deploy <pack>
+
+    Will:
+        - Loop through the requested packages (either passed as arguments or
+        all in your DOTFILES_ROOT)
+        - For each one, it will iterate the files and pass them to the
+        appropriate handlers.
+        - Paths are concatenated into a single path.
+        - Symlinks are removed and re-linked.
+        - We remove all shell related links and re-create them.
+        - brew install is run for any Brewfile.
+
+    For this to work, however, all your files need to be independent. That is, running the operation 
+    multiple times must be safe and produce the same result. For example: running brew install <formula> 
+    is (pretty much) so. So are adding aliases, directories to your PATH, or scripts to your shell.
+
+    This has another implication: updates are automatically deployed, but additions or removals are not. 
+    Let's see an example:
+
+        vim/
+            .vimrc
+            .vim/
+                colors/
+                    mycolor.vim
+
+    The vim name will trigger a symlink handler, which will symlink the .vimrc directly to ~/.vimrc. 
+    Any updates you make to .vimrc or .vim are live, as all of these are symlinks.
+
+    If you, however, deploy your vim pack, and later add a bin directory to it, this will not get 
+    added to your PATH. You will need to run a new deploy.
+
+    The same is true for deletions. Say you had an alias.sh file at deploy time, and then delete it. 
+    That alias will be present on your shell until the next deploy.
+
+    In practice, these are reasonable trade-offs. We edit things way more often than add, and 
+    deployment is a safe command away.
+
+    As long as you're okay with the two hard constraints dodot poses:
+
+        - All files must be independent
+        - No auto-magical additions or removals
+
+    You'll enjoy a system that's easy to understand, use, and evolve.
+
+
+Customizing dodot's Behavior
+
+    A key part of simplicity is not allowing too much customization. However, some aspects need this 
+    flexibility to avoid dangerous situations.
+
+    Inside a pack, a .dodot.toml file can be used to:
+
+        ignore=true:
+            dodot will ignore this directory entirely
+
+        disable: [<handler>]:
+            dodot will ignore this handler for this directory.
+            For example if set to ["Brewfile"] dodot will not run the brew
+            install
+
+        pre-fill: (boolean)
+            If set to true, on deployment, dodot will create any file/
+            directory for each handler absent from that pack. For example it
+            will create an alias.sh and bin directory if they are not present.
+            This means that changes to those will get picked up without any
+            deployments.
+
+        [override]: table
+            <handler-name>: path to use the said handler
+            Lets you choose arbitrary paths for any given trigger.
+
+
+Running dodot
+
+    The focus on simplicity is shown in the CLI. These are the commands:
+
+        deploy <pack>:
+            Deploy the pack, creating symlinks and running handlers. If no pack
+            is specified, all packs will be deployed.
+            
+        info <pack>:
+            Shows what in the pack would get triggered and what has already been
+            deployed and the handlers that will be run.
+
+        disable <path>:
+            Disable a pack by creating or updating the .dodot.toml file
+
+    And the following options are available:
+
+        --dry-run:
+            Show what would be done, but don't do it. This is useful to see
+            what will be deployed and what will be ignored.
+
+        --verbose
+            Show more information about what is being done. This is useful
+            to see what is being deployed and what is being ignored.
+
+        --dotfiles-root 
+            The root directory for your dotfiles, this overrides the environment
+            variable.
+
+
+The DOTFILES_ROOT
+
+    The DOTFILES_ROOT is the root directory for your dotfiles. This is where dodot will look for packs.
+    The most practical way to set it is the use of the $DOTFILES_ROOT environment variable.
+
+    If no such variable is set, dodot will consider the current working directory as the root.
+
+
+RECAP
+
+    Set the DOTFILES_ROOT environment variable to the root of your dotfiles.
+    Review the names of your files against triggers and make changes as needed.
+
+    Double-check all of it is idempotent. Run dodot deploy.
+
+
+    Shell-related Handlers
+
+    Shell-related handlers, aliases, and profiles, work in a slightly different way than regular 
+    linking profiles.
+
+    1. Install:
+    User must add a source ~/.config/dodot/shell/init.sh to their shell
+    
+    2. At Deploy Time:
+    dodot will create directories ~/.share/state/dodot/shell/aliases
+    In it, dodot will write each pack's alias as a link as in:
+        00-vim-alias.sh
+        01-git-alias.sh
+        
+    3. On shell init:
+    dodot will source the init.sh file, which will source all the
+    aliases in the ~/.share/state/dodot/shell/aliases directory.
+
+    This ensures a few things:
+        - The order of the aliases is preserved
+        - The aliases are not duplicated
+        - Each deployment is immediate
+        - Edits to any of these files are live
+        - It's easy to inspect what is being done
+
+    This is true for the alias, profile, and bin triggers.

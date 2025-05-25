@@ -1,0 +1,420 @@
+FSYNTH: SYNTHETIC FILESYSTEM FOR ISOLATED OPERATIONS
+===================================================
+
+Purpose and Rationale
+--------------------
+
+Fsynth provides a synthetic filesystem abstraction to isolate and queue 
+filesystem operations for batch execution. The primary goal is to separate 
+planning from execution, allowing most of the codebase to remain functional 
+and side-effect free. This approach:
+
+- Makes code easier to test by isolating side effects
+- Enables dry-run capabilities without code duplication
+- Improves reliability by enabling pre-execution validation
+- Allows for proper error handling and optional partial rollback
+
+Fsynth isn't intended for data-critical or concurrent environments. It's 
+designed for simple, reliable file operation batching with appropriate 
+safeguards.
+
+
+Core Design Principles
+---------------------
+
+1. PURE PLANNING, ISOLATED EXECUTION
+   Build an operation queue without making any actual filesystem changes,
+   then execute the queue in a controlled, isolated part of the codebase.
+
+2. CONTENT VERIFICATION
+   Each file operation should checksum source and target files where
+   appropriate. This enables:
+   - Verification that the source file hasn't changed since planning
+   - Detection of target file changes before overwriting
+   - Optional backing down if content has changed
+
+3. SAFE DIRECTORY HANDLING
+   When processing directories:
+   - Use an accumulator to track processed items
+   - Implement a configurable maximum to prevent processing huge directories
+   - Provide a clear mechanism to skip/include dotfiles
+
+4. ROLLBACK CAPABILITY
+   While not promising full transaction semantics, fsynth should attempt
+   reasonable rollback of failed operation batches.
+
+5. IMMUTABILITY AND FUNCTIONAL APPROACH
+   Once an operation is created, its parameters should be immutable.
+   This helps with debugging and ensures operations don't unexpectedly
+   change behavior between creation and execution.
+
+
+API Design
+---------
+
+The API follows the Command pattern with a queue-based approach.
+
+1. OPERATION INTERFACE [1]
+   Each operation encapsulates a specific filesystem action with a standard
+   interface including:
+   - execute(): performs the operation
+   - validate(): pre-checks operation validity
+   - checksum(): generates or verifies checksums
+   - undo(): reverses the operation (when possible)
+
+2. QUEUE MANAGEMENT [2]
+   The system uses an efficient queue implementation with O(1) enqueue/dequeue
+   operations.
+
+3. BASIC OPERATIONS
+   Core operations include:
+   - CopyFile: Copy a file with checksum verification
+   - SymlinkFile: Create a symlink
+   - CreateDirectory: Create a directory (and parent dirs if needed)
+   - DeleteFile: Remove a file with optional backup
+   - DeleteDirectory: Remove a directory with safety limits
+   - MoveFile: Move a file with checksum verification
+   - ChmodFile: Change file permissions
+
+4. PROCESSOR INTERFACE [3]
+   The processor executes the operation queue with proper error handling
+   and optional rollback.
+
+
+Implementation Details
+--------------------
+
+1. OPERATION REPRESENTATION
+   Each operation is a Lua table with methods (using metatables) that include:
+   - Common fields: source, target, options, checksum_data
+   - Operation-specific fields as needed
+   - Standard methods matching the operation interface
+
+2. CHECKSUMMING
+   - Use SHA-256 for robust checksumming
+   - Store checksums for both source and target files
+   - Options to compare checksums before operations
+   - Options to bail out if checksums don't match expectations
+
+3. DIRECTORY HANDLING
+   - Implement iteration with item counting
+   - Configurable max_items parameter (default reasonably low, ~1000)
+   - Store current count in an accumulator object
+   - Clear warning/error when limit is reached
+
+4. ERROR HANDLING
+   - Detailed error messages with context
+   - Error classification (fatal vs. non-fatal)
+   - Option to continue on non-fatal errors
+   - Logging of all operations and errors
+
+5. EXECUTION MODELS
+   - Standard: Execute operations in order, stopping on first error
+   - Validate-first: Validate all operations before executing any
+   - Best-effort: Try all operations, collecting errors
+   - Transactional: Attempt rollback of completed operations on failure
+
+
+Integration with Existing Systems
+-------------------------------
+
+Fsynth is designed to work with Penlight for path handling and filesystem
+operations. Key integration points:
+
+1. Leveraging Penlight's path functions for normalization, joining, etc.
+2. Using pl.dir for directory operations when appropriate
+3. Wrapping pl.file functions for file operations
+4. Using Penlight's utility functions where helpful
+
+The library will be tested with Busted, using mocks to isolate filesystem
+operations for unit testing.
+
+
+Testing Approach
+--------------
+
+1. UNIT TESTING
+   - Test each operation type in isolation
+   - Test validation, execution, and rollback separately
+   - Test queue management independently
+
+2. INTEGRATION TESTING
+   - Test full execution flows with controlled test directories
+   - Verify proper handling of edge cases (permissions, etc.)
+   - Test with various execution models
+
+
+
+[1] Operation Interface Example:
+```lua
+-- Base Operation class
+local Operation = {}
+Operation.__index = Operation
+
+function Operation.new(source, target, options)
+  local self = setmetatable({}, Operation)
+  self.source = source
+  self.target = target
+  self.options = options or {}
+  self.checksum_data = {}
+  return self
+end
+
+function Operation:validate()
+  error("validate() must be implemented by subclasses")
+end
+
+function Operation:execute()
+  error("execute() must be implemented by subclasses")
+end
+
+function Operation:checksum()
+  -- Default implementation uses SHA-256
+  -- Returns true if checksums match or no previous checksum exists
+  if not self.source then return true end
+  
+  local hash = require("sha2").sha256
+  local pl_file = require("pl.file")
+  
+  -- Generate source checksum
+  local source_content = pl_file.read(self.source)
+  if not source_content then
+    return false, "Failed to read source for checksumming"
+  end
+  
+  local new_checksum = hash(source_content)
+  
+  -- If we have a previous checksum, compare
+  if self.checksum_data.source_checksum then
+    if self.checksum_data.source_checksum ~= new_checksum then
+      return false, "Source file has changed since operation was created"
+    end
+  else
+    -- Store the new checksum
+    self.checksum_data.source_checksum = new_checksum
+  end
+  
+  return true
+end
+
+function Operation:undo()
+  return false, "Undo not supported for this operation"
+end
+
+return Operation
+```
+
+[2] Queue Management Example:
+```lua
+-- Efficient queue implementation
+local Queue = {}
+
+function Queue.new()
+  return { front = 1, back = 0, data = {} }
+end
+
+function Queue.enqueue(queue, item)
+  local back = queue.back + 1
+  queue.back = back
+  queue.data[back] = item
+end
+
+function Queue.dequeue(queue)
+  local front = queue.front
+  if front > queue.back then return nil end
+  
+  local value = queue.data[front]
+  queue.data[front] = nil  -- Allow garbage collection
+  queue.front = front + 1
+  
+  -- Reset indices when queue is empty
+  if queue.front > queue.back then
+    queue.front = 1
+    queue.back = 0
+  end
+  
+  return value
+end
+
+function Queue.peek(queue)
+  if queue.front > queue.back then return nil end
+  return queue.data[queue.front]
+end
+
+function Queue.is_empty(queue)
+  return queue.front > queue.back
+end
+
+function Queue.size(queue)
+  return queue.back - queue.front + 1
+end
+
+function Queue.clear(queue)
+  queue.data = {}
+  queue.front = 1
+  queue.back = 0
+end
+
+return Queue
+```
+
+[3] Processor Example:
+```lua
+-- Operation Queue Processor
+local Processor = {}
+
+function Processor.new(options)
+  return {
+    options = options or {},
+    executed = {},  -- For rollback tracking
+    errors = {}
+  }
+end
+
+function Processor.process(self, queue)
+  self.executed = {}
+  self.errors = {}
+  
+  -- Optionally validate all operations first
+  if self.options.validate_first then
+    local validation_queue = require("queue").new()
+    local validation_failed = false
+    
+    -- Copy all operations to validation queue
+    while not Queue.is_empty(queue) do
+      local op = Queue.dequeue(queue)
+      Queue.enqueue(validation_queue, op)
+      
+      local valid, err = op:validate()
+      if not valid then
+        table.insert(self.errors, {
+          operation = op,
+          phase = "validation",
+          error = err
+        })
+        validation_failed = true
+      end
+    end
+    
+    -- If validation failed, don't proceed with execution
+    if validation_failed and not self.options.force then
+      -- Move operations back to original queue
+      while not Queue.is_empty(validation_queue) do
+        Queue.enqueue(queue, Queue.dequeue(validation_queue))
+      end
+      return false, self.errors
+    end
+    
+    -- Move operations back to original queue
+    while not Queue.is_empty(validation_queue) do
+      Queue.enqueue(queue, Queue.dequeue(validation_queue))
+    end
+  end
+  
+  -- Process all operations
+  while not Queue.is_empty(queue) do
+    local op = Queue.dequeue(queue)
+    
+    -- Validate if not done already
+    if not self.options.validate_first then
+      local valid, err = op:validate()
+      if not valid then
+        table.insert(self.errors, {
+          operation = op,
+          phase = "validation",
+          error = err
+        })
+        
+        if not self.options.best_effort then
+          -- Roll back if needed
+          if self.options.transactional then
+            self:rollback()
+          end
+          return false, self.errors
+        end
+        
+        -- Skip execution and continue with next operation
+        goto continue
+      end
+    end
+    
+    -- Check checksums if enabled
+    if self.options.verify_checksums then
+      local checksum_ok, err = op:checksum()
+      if not checksum_ok then
+        table.insert(self.errors, {
+          operation = op,
+          phase = "checksum",
+          error = err
+        })
+        
+        if not self.options.best_effort then
+          -- Roll back if needed
+          if self.options.transactional then
+            self:rollback()
+          end
+          return false, self.errors
+        end
+        
+        -- Skip execution and continue with next operation
+        goto continue
+      end
+    end
+    
+    -- Execute operation
+    local success, err = op:execute()
+    if success then
+      table.insert(self.executed, op)
+    else
+      table.insert(self.errors, {
+        operation = op,
+        phase = "execution",
+        error = err
+      })
+      
+      if not self.options.best_effort then
+        -- Roll back if needed
+        if self.options.transactional then
+          self:rollback()
+        end
+        return false, self.errors
+      end
+    end
+    
+    ::continue::
+  end
+  
+  -- Return success if no errors or best_effort mode
+  if #self.errors == 0 then
+    return true
+  else
+    return self.options.best_effort, self.errors
+  end
+end
+
+function Processor:rollback()
+  local rollback_errors = {}
+  
+  -- Rollback in reverse order
+  for i = #self.executed, 1, -1 do
+    local op = self.executed[i]
+    local success, err = op:undo()
+    
+    if not success then
+      table.insert(rollback_errors, {
+        operation = op,
+        phase = "rollback",
+        error = err
+      })
+    end
+  end
+  
+  if #rollback_errors > 0 then
+    -- Add rollback errors to existing errors
+    for _, err in ipairs(rollback_errors) do
+      table.insert(self.errors, err)
+    end
+  end
+end
+
+return Processor
