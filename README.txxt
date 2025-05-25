@@ -153,3 +153,48 @@ Testing Approach
    - Test with various execution models
 
 
+Dependencies and LuaRocks
+------------------------
+
+Fsynth uses LuaRocks for dependency management. Always use LuaRocks to install, update, or remove dependencies to ensure consistent behavior across development and deployment environments.
+
+1. REQUIRED DEPENDENCIES
+   - lua >= 5.1
+   - penlight >= 1.5.0
+   - log.lua >= 0.1.0
+   - string-format-all >= 0.2.0
+
+2. TEST DEPENDENCIES
+   - busted >= 2.0.0
+
+3. COMMON LUAROCKS COMMANDS
+
+   # Installing all dependencies from the rockspec file
+   luarocks install --local
+
+   # Installing the package in development mode
+   luarocks make --local
+
+   # Cleaning dependencies (to test fresh install)
+   luarocks purge --force
+
+   # Adding a new dependency
+   luarocks install --local new_package
+   # Then update the rockspec file to include the dependency:
+   #   dependencies = {
+   #      "lua >= 5.1",
+   #      ...
+   #      "new_package >= 1.0.0"
+   #   }
+
+   # Listing installed packages
+   luarocks list
+
+   # Testing with busted
+   luarocks test
+
+   # Installing a specific version of a package
+   luarocks install --local log.lua 0.1.0-1
+
+   # Removing a package
+   luarocks remove log.lua
