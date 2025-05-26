@@ -1,0 +1,4 @@
+std = "lua51"
+
+[config]
+exclude = ["spec/**", "local/**", ".luarocks/**"]

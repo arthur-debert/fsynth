@@ -6,8 +6,14 @@ local fmt = require("string.format.all")
 -- Initialize the module
 log.info(fmt("Initializing fsynth module"))
 
--- Return the module table
-return {
+-- Load the high-level API
+local api = require("fsynth.api")
+
+-- Return the API module directly, but also expose internals for advanced usage
+local fsynth = api
+
+-- Expose internal components for advanced usage
+fsynth._internal = {
 	-- Export the main components
 	checksum = require("fsynth.checksum"),
 	processor = require("fsynth.processor"),
@@ -21,6 +27,6 @@ return {
 		move = require("fsynth.operations.move"),
 		symlink = require("fsynth.operations.symlink"),
 	},
-	-- Export the log module
-	log = log,
 }
+
+return fsynth

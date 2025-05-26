@@ -141,22 +141,22 @@ function SymlinkOperation:execute()
 	-- Create Symlink
 	-- lfs.symlink(target_path_for_link_content, path_of_link_itself)
 	log.debug("Creating symlink from %s to %s", self.target, self.source)
-	local ok, err_msg = pcall(function()
+	local link_ok, link_result = pcall(function()
 		return lfs.link(self.source, self.target, true)
 	end)
-	if not ok then
-		err_msg = fmt("Failed to create symlink from '{}' to '{}': {}", self.target, self.source, tostring(err_msg))
+	if not link_ok then
+		err_msg = fmt("Failed to create symlink from '{}' to '{}': {}", self.target, self.source, tostring(link_result))
 		log.error(err_msg)
 		return false, err_msg
 	end
-	-- pcall succeeded, err_msg is the result of lfs.link
+	-- pcall succeeded, link_result is the result of lfs.link
 	-- LuaFileSystem's lfs.link returns true on success, or nil plus error message on failure
-	if not err_msg then
+	if not link_result then
 		err_msg = "No such file or directory"
 		log.error("Failed to create symlink from '%s' to '%s': %s", self.target, self.source, err_msg)
 		return false, err_msg
 	end
-	-- If err_msg is true, it means lfs.symlink succeeded.
+	-- If link_result is true, it means lfs.symlink succeeded.
 	log.info("Symlink successfully created from %s to %s", self.target, self.source)
 	self.link_actually_created = true
 	return true
@@ -172,9 +172,7 @@ function SymlinkOperation:undo()
 
 	if not pl_path.exists(self.target) then
 		-- If symlink doesn't exist, we can still try to restore original if we overwrote something
-		if self.original_target_was_file or self.original_target_was_symlink then
-			-- Continue to restoration
-		else
+		if not (self.original_target_was_file or self.original_target_was_symlink) then
 			local msg = fmt("Undo: Symlink at '{}' does not exist, no action taken.", self.target)
 			log.info(msg)
 			return true, msg

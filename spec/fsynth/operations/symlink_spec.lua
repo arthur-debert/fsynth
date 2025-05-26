@@ -413,9 +413,7 @@ describe("SymlinkOperation", function()
 				-- This is a tolerant interpretation. This test is a placeholder to ensure this behavior
 				-- is consistent with the chosen philosophy across all operations (e.g., CreateFileOperation,
 				-- CreateDirectoryOperation currently expect failure in similar scenarios).
-				pending(
-					"Review if tolerant success for undoing a gone link aligns with overall undo consistency."
-				)
+				pending("Review if tolerant success for undoing a gone link aligns with overall undo consistency.")
 			end
 		)
 	end)

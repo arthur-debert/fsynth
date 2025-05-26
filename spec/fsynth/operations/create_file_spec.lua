@@ -225,25 +225,22 @@ describe("CreateFileOperation", function()
 			)
 		end)
 
-		it(
-			"PENDING: should clarify undo behavior if the file to be removed by undo does not exist anymore",
-			function()
-				-- Explanation: The current test for an already-gone file ("should fail (or do nothing) if the file does not exist at the time of undo")
-				-- expects undo to fail. This is a strict interpretation.
-				-- This test is a placeholder to align with the chosen consistent philosophy for "undoing" actions on items that are already gone.
-				-- - Strict failure: If the item the op created is gone, undo fails. (Current behavior for CreateFile)
-				-- - Tolerant success: If the item is gone, undo considers its job done (similar to SymlinkOperation's current undo for a gone link).
-				pending(
-					"Decide on consistent undo philosophy for items already gone (strict failure vs. tolerant success)."
-				)
-				-- Example for tolerant success:
-				-- local file_path_str = pl_path.join(tmp_dir, "undo_file_gone_tolerant.txt")
-				-- local op = CreateFileOperation.new(file_path_str, { content = "test" })
-				-- local _, _ = op:execute()
-				-- assert.is_true(pl_file.delete(file_path_str))
-				-- local undo_success, undo_err = op:undo()
-				-- assert.is_true(undo_success, undo_err)
-			end
-		)
+		it("PENDING: should clarify undo behavior if the file to be removed by undo does not exist anymore", function()
+			-- Explanation: The current test for an already-gone file ("should fail (or do nothing) if the file does not exist at the time of undo")
+			-- expects undo to fail. This is a strict interpretation.
+			-- This test is a placeholder to align with the chosen consistent philosophy for "undoing" actions on items that are already gone.
+			-- - Strict failure: If the item the op created is gone, undo fails. (Current behavior for CreateFile)
+			-- - Tolerant success: If the item is gone, undo considers its job done (similar to SymlinkOperation's current undo for a gone link).
+			pending(
+				"Decide on consistent undo philosophy for items already gone (strict failure vs. tolerant success)."
+			)
+			-- Example for tolerant success:
+			-- local file_path_str = pl_path.join(tmp_dir, "undo_file_gone_tolerant.txt")
+			-- local op = CreateFileOperation.new(file_path_str, { content = "test" })
+			-- local _, _ = op:execute()
+			-- assert.is_true(pl_file.delete(file_path_str))
+			-- local undo_success, undo_err = op:undo()
+			-- assert.is_true(undo_success, undo_err)
+		end)
 	end)
 end)

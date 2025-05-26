@@ -84,7 +84,7 @@ function CreateDirectoryOperation:execute()
 	end
 
 	local creation_success_flag -- Penlight's direct success (true) or failure (nil)
-	local pcall_success, pcall_err_or_val
+	local pcall_success
 
 	if self.options.create_parent_dirs then
 		log.debug("Creating directory with parent directories: %s", self.target)
