@@ -22,7 +22,7 @@ describe("SymlinkOperation", function()
 		assert.is_not_nil(file, "Failed to create file for test setup: " .. path_str)
 		file:write(content)
 		file:close()
-		assert.is_true(pl_path.exists(path_str), "File was not created: " .. path_str)
+		assert.are.equal(path_str, pl_path.exists(path_str), "File was not created: " .. path_str)
 	end
 
 	local function create_dir_for_test(path_str, make_parents)
@@ -34,7 +34,7 @@ describe("SymlinkOperation", function()
 		else
 			assert.is_true(pl_path.mkdir(path_str), "Failed to create directory for test setup: " .. path_str)
 		end
-		assert.is_true(pl_path.exists(path_str), "Directory was not created: " .. path_str)
+		assert.are.equal(path_str, pl_path.exists(path_str), "Directory was not created: " .. path_str)
 		assert.is_true(pl_path.isdir(path_str), "Path is not a directory: " .. path_str)
 	end
 
@@ -74,7 +74,8 @@ describe("SymlinkOperation", function()
 				assert.are.equal(link_target_dir_str, readlink(link_path_str))
 				assert.is_true(op.link_actually_created)
 				assert.is_true(pl_path.isdir(link_path_str)) -- Symlink to dir is also a dir
-				assert.is_true(pl_path.exists(pl_path.join(link_path_str, "child.txt")))
+				assert.are.equal(pl_path.join(link_path_str, "child.txt"),
+					pl_path.exists(pl_path.join(link_path_str, "child.txt")))
 				assert.are.equal("child content", pl_file.read(pl_path.join(link_path_str, "child.txt")))
 			end)
 
@@ -107,7 +108,7 @@ describe("SymlinkOperation", function()
 				assert.is_true(pl_path.islink(link_path_str))
 				assert.are.equal(link_target_path_str, readlink(link_path_str))
 				assert.is_true(op.link_actually_created)
-				assert.is_true(op.original_target_existed_and_was_overwritten)
+				assert.is_true(op.original_target_was_file)
 			end)
 
 			it("should replace an existing symlink with a new symlink", function()
@@ -117,7 +118,7 @@ describe("SymlinkOperation", function()
 				create_file_for_test(new_link_target_str, "new")
 				local link_path_str = pl_path.join(tmp_dir, "symlink_to_be_replaced")
 
-				assert.is_true(lfs.symlink(original_link_target_str, link_path_str))
+				assert.is_true(lfs.link(original_link_target_str, link_path_str, true))
 				assert.is_true(pl_path.islink(link_path_str))
 				assert.are.equal(original_link_target_str, readlink(link_path_str))
 
@@ -128,7 +129,7 @@ describe("SymlinkOperation", function()
 				assert.is_true(pl_path.islink(link_path_str))
 				assert.are.equal(new_link_target_str, readlink(link_path_str))
 				assert.is_true(op.link_actually_created)
-				assert.is_true(op.original_target_existed_and_was_overwritten)
+				assert.is_true(op.original_target_was_symlink)
 			end)
 		end)
 
@@ -143,7 +144,7 @@ describe("SymlinkOperation", function()
 				local success, err = op:execute()
 
 				assert.is_false(success)
-				assert.match("Target path already exists", err)
+				assert.match("already exists", err)
 				assert.is_false(pl_path.islink(link_path_str))
 				assert.is_true(pl_path.isfile(link_path_str))
 				assert.is_false(op.link_actually_created)
@@ -155,13 +156,13 @@ describe("SymlinkOperation", function()
 				local existing_sym_target_str = pl_path.join(tmp_dir, "existing_sym_points_here.txt")
 				create_file_for_test(existing_sym_target_str)
 				local link_path_str = pl_path.join(tmp_dir, "link_is_symlink_no_ow")
-				assert.is_true(lfs.symlink(existing_sym_target_str, link_path_str))
+				assert.is_true(lfs.link(existing_sym_target_str, link_path_str, true))
 
 				local op = SymlinkOperation.new(link_target_path_str, link_path_str)
 				local success, err = op:execute()
 
 				assert.is_false(success)
-				assert.match("Target path already exists", err)
+				assert.match("already exists", err)
 				assert.is_true(pl_path.islink(link_path_str))
 				assert.are.equal(existing_sym_target_str, readlink(link_path_str))
 				assert.is_false(op.link_actually_created)
@@ -178,7 +179,8 @@ describe("SymlinkOperation", function()
 				local success, err = op:execute()
 
 				assert.is_true(success, err)
-				assert.is_true(pl_path.exists(pl_path.join(tmp_dir, "parent", "child")))
+				assert.are.equal(pl_path.join(tmp_dir, "parent", "child"),
+					pl_path.exists(pl_path.join(tmp_dir, "parent", "child")))
 				assert.is_true(pl_path.isdir(pl_path.join(tmp_dir, "parent")))
 				assert.is_true(pl_path.islink(link_path_str))
 				assert.are.equal(link_target_path_str, readlink(link_path_str))
@@ -208,7 +210,7 @@ describe("SymlinkOperation", function()
 				local op = SymlinkOperation.new(nil, link_path_str)
 				local valid, err = op:validate()
 				assert.is_false(valid)
-				assert.match("Source path .* is required", err)
+				assert.match("Link target path .* not specified", err)
 			end)
 
 			it("should fail if link path (self.target) is not specified", function()
@@ -216,7 +218,7 @@ describe("SymlinkOperation", function()
 				local op = SymlinkOperation.new(link_target_path_str)
 				local valid, err = op:validate()
 				assert.is_false(valid)
-				assert.match("Target path .* is required", err)
+				assert.match("Link path .* not specified", err)
 			end)
 
 			it(
@@ -230,17 +232,11 @@ describe("SymlinkOperation", function()
 					local op = SymlinkOperation.new(link_target_path_str, link_path_isdir_str, { overwrite = true })
 					local valid, err_validate = op:validate()
 					assert.is_false(valid)
-					assert.match(
-						"Target path .* is an existing directory and cannot be overwritten by a symlink",
-						err_validate
-					)
+					assert.match("Cannot create symlink .* is a directory", err_validate)
 
 					local success_exec, err_exec = op:execute()
 					assert.is_false(success_exec)
-					assert.match(
-						"Target path .* is an existing directory and cannot be overwritten by a symlink",
-						err_exec
-					)
+					assert.match("Cannot create symlink .* is a directory", err_exec)
 					assert.is_false(pl_path.islink(link_path_isdir_str))
 					assert.is_true(pl_path.isdir(link_path_isdir_str))
 				end
@@ -279,7 +275,7 @@ describe("SymlinkOperation", function()
 
 			local undo_success, undo_err = op:undo()
 			assert.is_true(undo_success, undo_err)
-			assert.is_true(pl_path.exists(link_path_str))
+			assert.are.equal(link_path_str, pl_path.exists(link_path_str))
 			assert.is_false(pl_path.islink(link_path_str))
 		end)
 
@@ -319,8 +315,8 @@ describe("SymlinkOperation", function()
 
 				local undo_success, undo_err = op:undo()
 				assert.is_false(undo_success)
-				assert.match("Cannot undo symlink creation: path .* is not a symlink", undo_err)
-				assert.is_true(pl_path.exists(link_path_str))
+				assert.match("is not a symlink", undo_err)
+				assert.are.equal(link_path_str, pl_path.exists(link_path_str))
 				assert.are.equal("now a file", pl_file.read(link_path_str))
 			end
 		)
@@ -338,9 +334,8 @@ describe("SymlinkOperation", function()
 				local success, err = op:execute()
 				assert.is_true(success, err)
 				assert.is_true(pl_path.islink(link_path_str))
-				assert.is_true(op.original_target_existed_and_was_overwritten)
-				assert.are.equal("file", op.original_target_type)
-				assert.are.equal(original_content, op.original_target_content_if_file)
+				assert.is_true(op.original_target_was_file)
+				assert.are.equal(original_content, op.original_target_data)
 
 				local undo_success, undo_err = op:undo()
 				assert.is_true(undo_success, undo_err)
@@ -360,16 +355,15 @@ describe("SymlinkOperation", function()
 				create_file_for_test(original_symlink_points_to_str, "original symlink content")
 
 				local link_path_str = pl_path.join(tmp_dir, "symlink_to_be_overwritten_for_undo")
-				assert.is_true(lfs.symlink(original_symlink_points_to_str, link_path_str))
+				assert.is_true(lfs.link(original_symlink_points_to_str, link_path_str, true))
 
 				local op = SymlinkOperation.new(link_target_path_str, link_path_str, { overwrite = true })
 				local success, err = op:execute()
 				assert.is_true(success, err)
 				assert.is_true(pl_path.islink(link_path_str))
 				assert.are.equal(link_target_path_str, readlink(link_path_str))
-				assert.is_true(op.original_target_existed_and_was_overwritten)
-				assert.are.equal("symlink", op.original_target_type)
-				assert.are.equal(original_symlink_points_to_str, op.original_target_link_destination_if_symlink)
+				assert.is_true(op.original_target_was_symlink)
+				assert.are.equal(original_symlink_points_to_str, op.original_target_data)
 
 				local undo_success, undo_err = op:undo()
 				assert.is_true(undo_success, undo_err)

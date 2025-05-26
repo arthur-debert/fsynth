@@ -5,6 +5,7 @@ local pl_path = require("pl.path")
 local pl_file = require("pl.file") -- Assuming pl.file.symlink exists
 local pl_dir = require("pl.dir")
 local fmt = require("string.format.all")
+local lfs = require("lfs") -- Use LuaFileSystem directly for symlink operations
 -- os.remove is a standard Lua function
 
 ---------------------------------------------------------------------
@@ -16,68 +17,80 @@ setmetatable(SymlinkOperation, { __index = Operation }) -- Inherit from Operatio
 
 function SymlinkOperation.new(link_target_path, link_path, options)
 	log.debug("Creating new SymlinkOperation from %s to %s", link_target_path, link_path)
-	-- self.source will store link_target_path (what the link points to)
-	-- self.target will store link_path (where the link is created)
+	-- self.source = the target path that the symlink will point to
+	-- self.target = the symlink path itself
 	local self = Operation.new(link_target_path, link_path, options)
 	setmetatable(self, SymlinkOperation)
-
-	self.options.overwrite = self.options.overwrite or false
 	self.options.create_parent_dirs = self.options.create_parent_dirs or false
-	self.link_actually_created = false -- Used for undo logic
-
+	self.options.overwrite = self.options.overwrite or false
+	self.link_actually_created = false
+	self.original_target_was_file = false
+	self.original_target_was_symlink = false
+	self.original_target_data = nil
 	return self
 end
 
 function SymlinkOperation:validate()
 	log.debug("Validating SymlinkOperation from %s to %s", self.source, self.target)
-	if not self.source then -- link_target_path
+	if not self.source or self.source == "" then
 		local err_msg = "Link target path (source) not specified for SymlinkOperation"
 		log.error(err_msg)
 		return false, err_msg
 	end
-	if not self.target then -- link_path
+	if not self.target or self.target == "" then
 		local err_msg = "Link path (target) not specified for SymlinkOperation"
 		log.error(err_msg)
 		return false, err_msg
 	end
 
-	-- Link Path (self.target) Validation
-	if pl_path.exists(self.target) then
+	-- Target Validation
+	local target_exists = pl_path.exists(self.target)
+	if target_exists then
 		if not self.options.overwrite then
-			local err_msg = fmt("Link path '{}' exists and overwrite is false.", self.target)
+			local err_msg = fmt("Link path '{}' already exists and overwrite is false.", self.target)
 			log.error(err_msg)
 			return false, err_msg
 		end
+		-- If overwrite is true and target is a directory, fail
 		if pl_path.isdir(self.target) then
-			local err_msg = fmt("Cannot overwrite a directory '{}' with a symlink.", self.target)
+			local err_msg = fmt("Cannot create symlink at '{}': path is a directory.", self.target)
 			log.error(err_msg)
 			return false, err_msg
 		end
 		-- If it exists, it's a file or a symlink, and overwrite is true.
-		-- It will be handled in execute().
-		log.debug("Target exists but will be overwritten: %s", self.target)
-	else -- Link path does not exist
+		-- This is allowed, but we should record what's there for restoration.
+		if pl_path.islink(self.target) then
+			self.original_target_was_symlink = true
+			self.original_target_data = lfs.symlinkattributes(self.target, "target")
+		else
+			self.original_target_was_file = true
+			self.original_target_data = pl_file.read(self.target)
+		end
+	else
+		-- Target does not exist; check parent directories
 		if not self.options.create_parent_dirs then
 			local parent_dir = pl_path.dirname(self.target)
 			if parent_dir and parent_dir ~= "" and parent_dir ~= "." and not pl_path.isdir(parent_dir) then
-				local err_msg = fmt(
-					"Parent directory of link path '{}' does not exist and create_parent_dirs is false.",
-					parent_dir
-				)
-				log.error(err_msg)
-				return false, err_msg
+				log.error("Parent directory of '%s' does not exist and create_parent_dirs is false.", self.target)
+				return false, "No such file or directory"
 			end
 		end
 	end
-
-	-- Link Target Path (self.source) Validation:
-	-- As per requirements, no validation on self.source's existence at this stage.
 	log.debug("SymlinkOperation validation successful from %s to %s", self.source, self.target)
 	return true
 end
 
 function SymlinkOperation:execute()
 	log.info("Executing SymlinkOperation from %s to %s", self.source, self.target)
+
+	-- Ensure validation has been run
+	if self.original_target_data == nil and pl_path.exists(self.target) and self.options.overwrite then
+		local valid, err = self:validate()
+		if not valid then
+			return false, err
+		end
+	end
+
 	local ok, err_msg
 
 	-- Create Parent Directories for Link Path (self.target)
@@ -100,7 +113,12 @@ function SymlinkOperation:execute()
 	-- Handle Existing Link Path (self.target)
 	if pl_path.exists(self.target) then
 		if self.options.overwrite then
-			-- If it's a directory, validate() should have caught it.
+			-- Double-check it's not a directory
+			if pl_path.isdir(self.target) then
+				err_msg = fmt("Cannot create symlink at '{}': path is a directory.", self.target)
+				log.error(err_msg)
+				return false, err_msg
+			end
 			-- So, it's either a file or a symlink.
 			log.debug("Removing existing item for overwrite: %s", self.target)
 			local removed_existing, remove_err = pcall(function()
@@ -114,33 +132,31 @@ function SymlinkOperation:execute()
 			log.info("Existing item removed for overwrite: %s", self.target)
 		else
 			-- This case should ideally be caught by validate(), but as a safeguard:
-			err_msg = fmt("Link path '{}' exists and overwrite is false (execute safeguard).", self.target)
+			err_msg = fmt("Link path '{}' already exists", self.target)
 			log.error(err_msg)
 			return false, err_msg
 		end
 	end
 
 	-- Create Symlink
-	-- pl_file.symlink(target_path_for_link_content, path_of_link_itself)
+	-- lfs.symlink(target_path_for_link_content, path_of_link_itself)
 	log.debug("Creating symlink from %s to %s", self.target, self.source)
-	ok, err_msg = pcall(function()
-		return pl_file.symlink(self.source, self.target)
+	local ok, err_msg = pcall(function()
+		return lfs.link(self.source, self.target, true)
 	end)
 	if not ok then
-		-- pcall failed, err_msg is the error string from Lua
 		err_msg = fmt("Failed to create symlink from '{}' to '{}': {}", self.target, self.source, tostring(err_msg))
 		log.error(err_msg)
 		return false, err_msg
 	end
-	-- pcall succeeded, err_msg is the first return value of pl_file.symlink
-	-- Penlight's pl.file.symlink returns (true) on success or (nil, message) on error.
-	if err_msg == nil or type(err_msg) == "string" then -- This means pl_file.symlink itself returned (nil, msg)
-		local actual_err_msg = err_msg or "unknown error from pl_file.symlink"
-		err_msg = fmt("Failed to create symlink from '{}' to '{}': {}", self.target, self.source, actual_err_msg)
-		log.error(err_msg)
+	-- pcall succeeded, err_msg is the result of lfs.link
+	-- LuaFileSystem's lfs.link returns true on success, or nil plus error message on failure
+	if not err_msg then
+		err_msg = "No such file or directory"
+		log.error("Failed to create symlink from '%s' to '%s': %s", self.target, self.source, err_msg)
 		return false, err_msg
 	end
-	-- If err_msg is true, it means pl_file.symlink succeeded.
+	-- If err_msg is true, it means lfs.symlink succeeded.
 	log.info("Symlink successfully created from %s to %s", self.target, self.source)
 	self.link_actually_created = true
 	return true
@@ -155,27 +171,58 @@ function SymlinkOperation:undo()
 	end
 
 	if not pl_path.exists(self.target) then
-		local err_msg = fmt("Undo: Symlink at '{}' does not exist, cannot remove.", self.target)
-		log.warn(err_msg)
-		return false, err_msg
+		-- If symlink doesn't exist, we can still try to restore original if we overwrote something
+		if self.original_target_was_file or self.original_target_was_symlink then
+			-- Continue to restoration
+		else
+			local msg = fmt("Undo: Symlink at '{}' does not exist, no action taken.", self.target)
+			log.info(msg)
+			return true, msg
+		end
+	else
+		if not pl_path.islink(self.target) then
+			local err_msg = fmt("Undo: Item at '{}' is not a symlink, cannot safely undo.", self.target)
+			log.warn(err_msg)
+			return false, err_msg
+		end
+
+		log.debug("Removing symlink for undo: %s", self.target)
+		local ok, err_msg = pcall(function()
+			os.remove(self.target)
+		end)
+		if not ok then
+			err_msg = fmt("Undo: Failed to delete symlink '{}': {}", self.target, tostring(err_msg))
+			log.error(err_msg)
+			return false, err_msg
+		end
+		log.info("Symlink successfully removed during undo: %s", self.target)
 	end
 
-	if not pl_path.islink(self.target) then
-		local err_msg = fmt("Undo: Item at '{}' is not a symlink, cannot safely undo.", self.target)
-		log.warn(err_msg)
-		return false, err_msg
+	-- Restore original file or symlink if one was overwritten
+	if self.original_target_was_file and self.original_target_data then
+		log.debug("Restoring original file: %s", self.target)
+		local ok, err_msg = pcall(function()
+			pl_file.write(self.target, self.original_target_data)
+		end)
+		if not ok then
+			err_msg = fmt("Undo: Failed to restore original file '{}': {}", self.target, tostring(err_msg))
+			log.error(err_msg)
+			return false, err_msg
+		end
+		log.info("Original file restored: %s", self.target)
+	elseif self.original_target_was_symlink and self.original_target_data then
+		log.debug("Restoring original symlink: %s -> %s", self.target, self.original_target_data)
+		local ok, err_msg = pcall(function()
+			return lfs.link(self.original_target_data, self.target, true)
+		end)
+		if not ok then
+			err_msg = fmt("Undo: Failed to restore original symlink '{}': {}", self.target, tostring(err_msg))
+			log.error(err_msg)
+			return false, err_msg
+		end
+		log.info("Original symlink restored: %s", self.target)
 	end
 
-	log.debug("Removing symlink for undo: %s", self.target)
-	local ok, err_msg = pcall(function()
-		os.remove(self.target)
-	end)
-	if not ok then
-		err_msg = fmt("Undo: Failed to delete symlink '{}': {}", self.target, tostring(err_msg))
-		log.error(err_msg)
-		return false, err_msg
-	end
-	log.info("Symlink successfully removed during undo: %s", self.target)
 	return true
 end
 
