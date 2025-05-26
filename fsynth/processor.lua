@@ -30,113 +30,113 @@ end
 --   success: true if all operations succeeded, false otherwise
 --   errors: table of errors encountered during processing
 function Processor:process(queue)
-  log.debug(fmt("Processor:process called, self type: {}", type(self)))
-  self.executed = {}
-  self.errors = {}
-  -- Optionally validate all operations first
-  if self.options.validate_first then
-    local validation_queue = Queue.new()
-    local validation_failed = false
-    -- Copy all operations to validation queue
-    while not Queue.is_empty(queue) do
-      local op = Queue.dequeue(queue)
-      Queue.enqueue(validation_queue, op)
-      local valid, err = op:validate()
-      if not valid then
-        table.insert(self.errors, {
-          operation = op,
-          phase = "validation",
-          error = err
-        })
-        validation_failed = true
-      end
-    end
-    -- If validation failed, don't proceed with execution
-    if validation_failed and not self.options.force then
-      -- Move operations back to original queue
-      while not Queue.is_empty(validation_queue) do
-        Queue.enqueue(queue, Queue.dequeue(validation_queue))
-      end
-      return false, self.errors
-    end
-    -- Move operations back to original queue
-    while not Queue.is_empty(validation_queue) do
-      Queue.enqueue(queue, Queue.dequeue(validation_queue))
-    end
-  end
-  -- Process all operations
-  while not Queue.is_empty(queue) do
-    local op = Queue.dequeue(queue)
-    local should_execute = true -- Flag to control execution
+	log.debug(fmt("Processor:process called, self type: {}", type(self)))
+	self.executed = {}
+	self.errors = {}
+	-- Optionally validate all operations first
+	if self.options.validate_first then
+		local validation_queue = Queue.new()
+		local validation_failed = false
+		-- Copy all operations to validation queue
+		while not Queue.is_empty(queue) do
+			local op = Queue.dequeue(queue)
+			Queue.enqueue(validation_queue, op)
+			local valid, err = op:validate()
+			if not valid then
+				table.insert(self.errors, {
+					operation = op,
+					phase = "validation",
+					error = err,
+				})
+				validation_failed = true
+			end
+		end
+		-- If validation failed, don't proceed with execution
+		if validation_failed and not self.options.force then
+			-- Move operations back to original queue
+			while not Queue.is_empty(validation_queue) do
+				Queue.enqueue(queue, Queue.dequeue(validation_queue))
+			end
+			return false, self.errors
+		end
+		-- Move operations back to original queue
+		while not Queue.is_empty(validation_queue) do
+			Queue.enqueue(queue, Queue.dequeue(validation_queue))
+		end
+	end
+	-- Process all operations
+	while not Queue.is_empty(queue) do
+		local op = Queue.dequeue(queue)
+		local should_execute = true -- Flag to control execution
 
-    -- Validate if not done already
-    if not self.options.validate_first then
-      local valid, err_validate = op:validate()
-      if not valid then
-        table.insert(self.errors, {
-          operation = op,
-          phase = "validation",
-          error = err_validate
-        })
-        if not self.options.best_effort then
-          -- Roll back if needed
-          if self.options.transactional then
-            self:rollback()
-          end
-          return false, self.errors
-        end
-        should_execute = false -- Skip execution
-      end
-    end
+		-- Validate if not done already
+		if not self.options.validate_first then
+			local valid, err_validate = op:validate()
+			if not valid then
+				table.insert(self.errors, {
+					operation = op,
+					phase = "validation",
+					error = err_validate,
+				})
+				if not self.options.best_effort then
+					-- Roll back if needed
+					if self.options.transactional then
+						self:rollback()
+					end
+					return false, self.errors
+				end
+				should_execute = false -- Skip execution
+			end
+		end
 
-    -- Check checksums if enabled
-    if should_execute and self.options.verify_checksums then
-      local checksum_ok, err_checksum = op:checksum()
-      if not checksum_ok then
-        table.insert(self.errors, {
-          operation = op,
-          phase = "checksum",
-          error = err_checksum
-        })
-        if not self.options.best_effort then
-          -- Roll back if needed
-          if self.options.transactional then
-            self:rollback()
-          end
-          return false, self.errors
-        end
-        should_execute = false -- Skip execution
-      end
-    end
+		-- Check checksums if enabled
+		if should_execute and self.options.verify_checksums then
+			local checksum_ok, err_checksum = op:checksum()
+			if not checksum_ok then
+				table.insert(self.errors, {
+					operation = op,
+					phase = "checksum",
+					error = err_checksum,
+				})
+				if not self.options.best_effort then
+					-- Roll back if needed
+					if self.options.transactional then
+						self:rollback()
+					end
+					return false, self.errors
+				end
+				should_execute = false -- Skip execution
+			end
+		end
 
-    -- Execute operation
-    if should_execute then
-      local success, err_execute = op:execute()
-      if success then
-        table.insert(self.executed, op)
-      else
-        table.insert(self.errors, {
-          operation = op,
-          phase = "execution",
-          error = err_execute
-        })
-        if not self.options.best_effort then
-          -- Roll back if needed
-          if self.options.transactional then
-            self:rollback()
-          end
-          return false, self.errors
-        end
-      end
-    end
-    -- Label ::continue:: is no longer needed here
-  end
-  -- Return success if no errors or best_effort mode
-  if #self.errors == 0 then
-    return true, nil
-  else
-    return self.options.best_effort, self.errors
-  end
+		-- Execute operation
+		if should_execute then
+			local success, err_execute = op:execute()
+			if success then
+				table.insert(self.executed, op)
+			else
+				table.insert(self.errors, {
+					operation = op,
+					phase = "execution",
+					error = err_execute,
+				})
+				if not self.options.best_effort then
+					-- Roll back if needed
+					if self.options.transactional then
+						self:rollback()
+					end
+					return false, self.errors
+				end
+			end
+		end
+		-- Label ::continue:: is no longer needed here
+	end
+	-- Return success if no errors or best_effort mode
+	if #self.errors == 0 then
+		return true, nil
+	else
+		return self.options.best_effort, self.errors
+	end
 end
 
 -- Attempt to roll back all executed operations in reverse order

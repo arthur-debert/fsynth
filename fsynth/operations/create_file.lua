@@ -18,16 +18,16 @@ setmetatable(CreateFileOperation, { __index = Operation }) -- Inherit from Opera
 function CreateFileOperation.new(target_path, options)
 	log.debug("Creating new CreateFileOperation for target: %s", target_path)
 	local self = Operation.new(nil, target_path, options) -- Source is nil for create
-	setmetatable(self, CreateFileOperation) -- Set metatable to CreateFileOperation
-	self.options.content = self.options.content or "" -- Default content is empty string
+	setmetatable(self, CreateFileOperation)            -- Set metatable to CreateFileOperation
+	self.options.content = self.options.content or ""  -- Default content is empty string
 	self.options.create_parent_dirs = self.options.create_parent_dirs or false
-	self.checksum_data.target_checksum = nil -- Specific to CreateFile, not in base Operation new()
+	self.checksum_data.target_checksum = nil           -- Specific to CreateFile, not in base Operation new()
 	return self
 end
 
 function CreateFileOperation:validate()
 	log.debug("Validating CreateFileOperation for target: %s", self.target or "nil")
-	if not self.target then
+	if not self.target or self.target == "" then
 		local err_msg = "Target path not specified for CreateFileOperation"
 		log.error(err_msg)
 		return false, err_msg
@@ -54,6 +54,20 @@ end
 function CreateFileOperation:execute()
 	log.info("Executing CreateFileOperation for target: %s", self.target)
 	local ok, err_msg
+
+	-- Check if target is an existing directory
+	if pl_path.isdir(self.target) then
+		err_msg = fmt("Target '{}' is an existing directory", self.target)
+		log.error(err_msg)
+		return false, err_msg
+	end
+
+	-- Check if file already exists (exclusive mode)
+	if pl_path.exists(self.target) then
+		err_msg = fmt("File '{}' already exists", self.target)
+		log.error(err_msg)
+		return false, err_msg
+	end
 
 	-- Create Parent Directories
 	if self.options.create_parent_dirs then
@@ -108,15 +122,14 @@ function CreateFileOperation:undo()
 	local ok, err_msg
 
 	if not pl_path.exists(self.target) then
-		-- If the file doesn't exist, undo might be considered successful or a no-op.
-		-- For robustness, let's indicate it wasn't there to begin with.
-		local msg = fmt("File '{}' did not exist, undo operation is a no-op.", self.target)
-		log.info(msg)
-		return true, msg
+		-- If the file doesn't exist, return false with error
+		err_msg = fmt("File '{}' does not exist", self.target)
+		log.error(err_msg)
+		return false, err_msg
 	end
 
 	if not self.checksum_data.target_checksum then
-		err_msg = fmt("No checksum recorded for '{}' at creation, cannot safely undo.", self.target)
+		err_msg = fmt("No checksum recorded for '{}' at creation", self.target)
 		log.error(err_msg)
 		return false, err_msg
 	end

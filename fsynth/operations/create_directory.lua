@@ -95,8 +95,8 @@ function CreateDirectoryOperation:execute()
 			log.info("Directory successfully created: %s", self.target)
 			return true
 		elseif not pcall_success then
-			err_msg = fmt("Failed to create directory '{}' (pcall error): {}", self.target,
-				tostring(creation_success_flag))
+			err_msg =
+				fmt("Failed to create directory '{}' (pcall error): {}", self.target, tostring(creation_success_flag))
 			log.error(err_msg)
 			return false, err_msg
 		else
@@ -114,8 +114,8 @@ function CreateDirectoryOperation:execute()
 			log.info("Directory successfully created: %s", self.target)
 			return true
 		elseif not pcall_success then
-			err_msg = fmt("Failed to create directory '{}' (pcall error): {}", self.target,
-				tostring(creation_success_flag))
+			err_msg =
+				fmt("Failed to create directory '{}' (pcall error): {}", self.target, tostring(creation_success_flag))
 			log.error(err_msg)
 			return false, err_msg
 		else
@@ -179,8 +179,7 @@ function CreateDirectoryOperation:undo()
 	end
 	-- pl_path.rmdir returns the path on success
 	if not rmdir_pcall_val1 then -- returned nil
-		local err_msg =
-			fmt("Undo: Failed to remove directory '{}': directory removal failed", self.target)
+		local err_msg = fmt("Undo: Failed to remove directory '{}': directory removal failed", self.target)
 		log.error(err_msg)
 		return false, err_msg
 	end
