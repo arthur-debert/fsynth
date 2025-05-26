@@ -28,7 +28,7 @@ end
 
 function CreateDirectoryOperation:validate()
 	log.debug("Validating CreateDirectoryOperation for: %s", self.target)
-	if not self.target then
+	if not self.target or self.target == "" then
 		local err_msg = "Target directory path not specified for CreateDirectoryOperation"
 		log.error(err_msg)
 		return false, err_msg
@@ -71,6 +71,12 @@ function CreateDirectoryOperation:execute()
 		return true
 	end
 
+	if path_existed_as_dir_before_op and self.options.exclusive then
+		err_msg = fmt("Directory '{}' already exists and operation is exclusive.", self.target)
+		log.error(err_msg)
+		return false, err_msg
+	end
+
 	if pl_path.exists(self.target) and not path_existed_as_dir_before_op then -- e.g. it's a file
 		err_msg = fmt("Target path '{}' exists and is not a directory.", self.target)
 		log.error(err_msg)
@@ -82,56 +88,43 @@ function CreateDirectoryOperation:execute()
 
 	if self.options.create_parent_dirs then
 		log.debug("Creating directory with parent directories: %s", self.target)
-		pcall_success, pcall_err_or_val = pcall(function()
-			return pl_dir.makepath(self.target)
-		end)
+		pcall_success, creation_success_flag, err_msg = pcall(pl_dir.makepath, self.target)
+		if pcall_success and creation_success_flag then
+			-- makepath succeeded
+			self.dir_actually_created_by_this_op = not path_existed_as_dir_before_op
+			log.info("Directory successfully created: %s", self.target)
+			return true
+		elseif not pcall_success then
+			err_msg = fmt("Failed to create directory '{}' (pcall error): {}", self.target,
+				tostring(creation_success_flag))
+			log.error(err_msg)
+			return false, err_msg
+		else
+			-- Penlight function returned false/nil
+			err_msg = fmt("Failed to create directory '{}': {}", self.target, err_msg or "unknown error")
+			log.error(err_msg)
+			return false, err_msg
+		end
 	else
 		log.debug("Creating directory without parent directories: %s", self.target)
-		pcall_success, pcall_err_or_val = pcall(function()
-			return pl_dir.makedir(self.target)
-		end)
+		pcall_success, creation_success_flag, err_msg = pcall(pl_path.mkdir, self.target)
+		if pcall_success and creation_success_flag then
+			-- mkdir succeeded (returns true on success)
+			self.dir_actually_created_by_this_op = true
+			log.info("Directory successfully created: %s", self.target)
+			return true
+		elseif not pcall_success then
+			err_msg = fmt("Failed to create directory '{}' (pcall error): {}", self.target,
+				tostring(creation_success_flag))
+			log.error(err_msg)
+			return false, err_msg
+		else
+			-- mkdir returned false/nil
+			err_msg = fmt("Failed to create directory '{}': {}", self.target, err_msg or "unknown error")
+			log.error(err_msg)
+			return false, err_msg
+		end
 	end
-
-	if not pcall_success then
-		err_msg = fmt("Failed to create directory '{}' (pcall error): {}", self.target, tostring(pcall_err_or_val))
-		log.error(err_msg)
-		return false, err_msg
-	end
-
-	-- If pcall succeeded, pcall_err_or_val is the first return value of the called function
-	-- For pl_dir.makepath/makedir, success is true. If they fail, they return (nil, message).
-	-- This logic is a bit complex due to dual error reporting. Let's simplify:
-	-- If pcall_success is true, and pcall_err_or_val is true, then it's definitely a success.
-	-- If pcall_success is true, but pcall_err_or_val is nil (meaning pl_dir.makepath/dir
-	-- returned nil, msg), then it's a Penlight-reported error.
-	-- Let's re-pcall to get both returns properly.
-
-	if self.options.create_parent_dirs then
-		pcall_success, creation_success_flag, err_msg = pcall(pl_dir.makepath, self.target)
-	else
-		pcall_success, creation_success_flag, err_msg = pcall(pl_dir.makedir, self.target)
-	end
-
-	if not pcall_success then
-		err_msg = fmt("Failed to create directory '{}' (pcall error): {}", self.target, tostring(creation_success_flag))
-		log.error(err_msg)
-		return false, err_msg
-	end
-	if not creation_success_flag then -- Penlight function returned nil, msg
-		err_msg = fmt("Failed to create directory '{}': {}", self.target, err_msg or "unknown Penlight error")
-		log.error(err_msg)
-		return false, err_msg
-	end
-
-	-- If we reached here, directory operation was successful
-	if not path_existed_as_dir_before_op then
-		self.dir_actually_created_by_this_op = true
-		log.info("Directory successfully created: %s", self.target)
-	else
-		log.info("Directory already existed: %s", self.target)
-	end
-
-	return true
 end
 
 function CreateDirectoryOperation:undo()
@@ -161,7 +154,7 @@ function CreateDirectoryOperation:undo()
 	-- if ok_files is true, err_files_or_data is the actual table of files
 
 	local ok_dirs, err_dirs_or_data = pcall(function()
-		content_dirs = pl_dir.getsubdirs(self.target)
+		content_dirs = pl_dir.getdirectories(self.target)
 		return content_dirs
 	end)
 	if not ok_dirs then
@@ -175,8 +168,8 @@ function CreateDirectoryOperation:undo()
 		return false, err_msg
 	end
 
-	-- Remove the directory
-	local rmdir_pcall_ok, rmdir_pcall_val1, rmdir_pcall_val2 = pcall(pl_dir.rmdir, self.target)
+	-- Remove the directory using pl_path.rmdir
+	local rmdir_pcall_ok, rmdir_pcall_val1 = pcall(pl_path.rmdir, self.target)
 
 	if not rmdir_pcall_ok then
 		local err_msg =
@@ -184,9 +177,10 @@ function CreateDirectoryOperation:undo()
 		log.error(err_msg)
 		return false, err_msg
 	end
-	if not rmdir_pcall_val1 then -- Penlight rmdir returned nil, msg
+	-- pl_path.rmdir returns the path on success
+	if not rmdir_pcall_val1 then -- returned nil
 		local err_msg =
-			fmt("Undo: Failed to remove directory '{}': {}", self.target, rmdir_pcall_val2 or "unknown Penlight error")
+			fmt("Undo: Failed to remove directory '{}': directory removal failed", self.target)
 		log.error(err_msg)
 		return false, err_msg
 	end
