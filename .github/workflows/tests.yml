@@ -48,4 +48,11 @@ jobs:
         env:
           LUAROCKS_LOCAL: true
         run: |
-          source .envrc && busted
+          echo "Sourcing .envrc..."
+          source .envrc
+          echo "PATH after sourcing .envrc: $PATH"
+          echo "LUA_PATH after sourcing .envrc: $LUA_PATH"
+          echo "LUA_CPATH after sourcing .envrc: $LUA_CPATH"
+          echo "Which busted: $(which busted)"
+          echo "Attempting to run busted..."
+          busted
