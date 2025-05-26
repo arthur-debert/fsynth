@@ -6,7 +6,7 @@
 # Function to install the pre-commit hook
 install_hook() {
     local git_dir=$(git rev-parse --git-dir 2>/dev/null)
-    
+
     if [ -z "$git_dir" ]; then
         echo "Error: Not a git repository. Run this from the root of your git repository."
         exit 1
@@ -15,10 +15,10 @@ install_hook() {
     local hook_dir="$git_dir/hooks"
     local hook_path="$hook_dir/pre-commit"
     local script_path=$(realpath "$0")
-    
+
     # Create hooks directory if it doesn't exist
     mkdir -p "$hook_dir"
-    
+
     # Create the symlink
     if [ -e "$hook_path" ]; then
         if [ -L "$hook_path" ]; then
@@ -30,11 +30,11 @@ install_hook() {
             mv "$hook_path" "$hook_path.backup"
         fi
     fi
-    
+
     # Create the symlink
     ln -s "$script_path" "$hook_path"
     chmod +x "$hook_path"
-    
+
     echo "✅ Pre-commit hook installed successfully at $hook_path"
     exit 0
 }
@@ -42,21 +42,24 @@ install_hook() {
 # Main script logic
 main() {
     echo "=== Running pre-commit checks ==="
-    
+
     # Run lint checks
     echo "Running linting checks..."
     if ! ./bin/lint; then
         echo "❌ Linting failed. Commit aborted."
         exit 1
     fi
-    
+
     # Run tests
     echo "Running tests..."
+    SCRIPT_DIR=$(dirname "$0")
+    # shellcheck disable=SC1091
+    source "${SCRIPT_DIR}/../.envrc"
     if ! busted; then
         echo "❌ Tests failed. Commit aborted."
         exit 1
     fi
-    
+
     echo "✅ All pre-commit checks passed!"
     exit 0
 }
