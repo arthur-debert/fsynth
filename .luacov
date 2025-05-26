@@ -1,0 +1,29 @@
+return {
+  -- Modules to include in coverage analysis
+  include = {
+    "fsynth",
+  },
+  -- Modules to exclude from coverage analysis
+  exclude = {
+    "spec",
+    "%.luarocks",
+  },
+  -- Filename to store stats collected
+  statsfile = "coverage/luacov.stats.out",
+  -- Filename to store report
+  reportfile = "coverage/luacov.report.out",
+  -- Enable saving coverage stats
+  savestepdefaults = true,
+  -- Run reporter on completion (useful for CI systems)
+  runreport = true,
+  -- Delete stats file after reporting (cleanup)
+  deletestats = false,
+  -- List of reporters to run at the end
+  reporter = "default",
+  -- Additional reporters
+  reporters = {"default", "lcov"},
+  -- LCOV reporter configuration
+  lcov = {
+    reportfile = "coverage/lcov.info"
+  },
+}
