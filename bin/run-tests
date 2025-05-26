@@ -5,9 +5,9 @@
 
 # Get the directory where the script is located
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
 # Source the environment setup script
+# shellcheck disable=SC1091
 source "${SCRIPT_DIR}/luapath.sh"
 
 # Set test mode environment variable to suppress log output
