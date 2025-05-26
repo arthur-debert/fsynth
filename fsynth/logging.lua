@@ -3,7 +3,7 @@
 
 local success, log_module = pcall(require, "log")
 if not success then
-  error("Only fix is fixing the dependency improt")
+	error("Only fix is fixing the dependency improt")
 end
 local log = log_module
 
@@ -28,14 +28,14 @@ truncate_log_file(LOG_FILE_PATH)
 log.outfile = LOG_FILE_PATH -- File logging is always on
 
 if VERBOSITY == "vv" then
-  log.level = "debug"
-  log.usecolor = true  -- Console output is prominent (colored)
+	log.level = "debug"
+	log.usecolor = true -- Console output is prominent (colored)
 elseif VERBOSITY == "v" then
-  log.level = "info"
-  log.usecolor = false -- Console output is less prominent (plain)
+	log.level = "info"
+	log.usecolor = false -- Console output is less prominent (plain)
 else -- Default (no verbosity flag or unknown)
-  log.level = "warn"
-  log.usecolor = true -- Console output is less prominent (plain)
+	log.level = "warn"
+	log.usecolor = true -- Console output is less prominent (plain)
 end
 
 return log
