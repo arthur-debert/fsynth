@@ -1,0 +1,70 @@
+#!/usr/bin/env bash
+
+# This script is used as a pre-commit hook to ensure that the code is formatted, linted and the tests pass before allowing a commit.
+# If any of these checks fail, the commit will be aborted.
+
+# Function to install the pre-commit hook
+install_hook() {
+    local git_dir=$(git rev-parse --git-dir 2>/dev/null)
+    
+    if [ -z "$git_dir" ]; then
+        echo "Error: Not a git repository. Run this from the root of your git repository."
+        exit 1
+    fi
+
+    local hook_dir="$git_dir/hooks"
+    local hook_path="$hook_dir/pre-commit"
+    local script_path=$(realpath "$0")
+    
+    # Create hooks directory if it doesn't exist
+    mkdir -p "$hook_dir"
+    
+    # Create the symlink
+    if [ -e "$hook_path" ]; then
+        if [ -L "$hook_path" ]; then
+            echo "Removing existing pre-commit hook symlink..."
+            rm "$hook_path"
+        else
+            echo "Warning: Existing pre-commit hook found at $hook_path"
+            echo "Backing it up to $hook_path.backup"
+            mv "$hook_path" "$hook_path.backup"
+        fi
+    fi
+    
+    # Create the symlink
+    ln -s "$script_path" "$hook_path"
+    chmod +x "$hook_path"
+    
+    echo "✅ Pre-commit hook installed successfully at $hook_path"
+    exit 0
+}
+
+# Main script logic
+main() {
+    echo "=== Running pre-commit checks ==="
+    
+    # Run lint checks
+    echo "Running linting checks..."
+    if ! ./bin/lint; then
+        echo "❌ Linting failed. Commit aborted."
+        exit 1
+    fi
+    
+    # Run tests
+    echo "Running tests..."
+    if ! busted; then
+        echo "❌ Tests failed. Commit aborted."
+        exit 1
+    fi
+    
+    echo "✅ All pre-commit checks passed!"
+    exit 0
+}
+
+# If the first argument is "install", run the install function
+if [ "$1" = "install" ]; then
+    install_hook
+else
+    # Otherwise run the main script
+    main
+fi
