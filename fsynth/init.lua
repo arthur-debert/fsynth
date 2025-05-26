@@ -12,7 +12,6 @@ return {
 	checksum = require("fsynth.checksum"),
 	processor = require("fsynth.processor"),
 	queue = require("fsynth.queue"),
-	utils = require("fsynth.utils"),
 	-- Export operation types
 	operations = {
 		copy_file = require("fsynth.operations.copy_file"),

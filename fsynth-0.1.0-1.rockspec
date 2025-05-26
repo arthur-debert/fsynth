@@ -33,7 +33,6 @@ build = {
 		["fsynth.processor"] = "fsynth/processor.lua",
 		["fsynth.queue"] = "fsynth/queue.lua",
 		["fsynth.checksum"] = "fsynth/checksum.lua",
-		["fsynth.utils"] = "fsynth/utils.lua",
 		["fsynth.log"] = "fsynth/log.lua",
 		["fsynth.operations.copy_file"] = "fsynth/operations/copy_file.lua",
 		["fsynth.operations.create_directory"] = "fsynth/operations/create_directory.lua",
