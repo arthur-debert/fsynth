@@ -22,20 +22,20 @@ function MoveOperation.new(source_path, target_path, options)
 	self.options.create_parent_dirs = self.options.create_parent_dirs or false
 	-- self.options.overwrite_directory_contents is not used yet, per instructions
 
-	self.was_directory = false -- Will be set in validate()
+	self.was_directory = nil                              -- Will be set in validate()
 	self.original_target_existed_and_was_overwritten = false -- Will be set in execute()
 
-	self.checksum_data.initial_source_checksum = nil -- For files, set in validate()
-	self.checksum_data.final_target_checksum = nil -- For files, set in execute()
+	self.checksum_data.initial_source_checksum = nil      -- For files, set in validate()
+	self.checksum_data.final_target_checksum = nil        -- For files, set in execute()
 
 	return self
 end
 
 function MoveOperation:validate()
-	if not self.source then
+	if not self.source or self.source == "" then
 		return false, "Source path not specified for MoveOperation"
 	end
-	if not self.target then
+	if not self.target or self.target == "" then
 		return false, "Target path not specified for MoveOperation"
 	end
 
@@ -61,29 +61,22 @@ function MoveOperation:validate()
 	-- Target Validation
 	if pl_path.exists(self.target) then
 		if not self.options.overwrite then
-			return false, fmt("Target path '{}' exists and overwrite is false.", self.target)
+			return false, fmt("Target path '{}' already exists", self.target)
 		end
 		-- If overwrite is true:
 		if self.was_directory and pl_path.isfile(self.target) then
-			return false, fmt("Cannot move directory '{}' onto an existing file '{}'.", self.source, self.target)
+			return false, "Cannot move a directory onto a file"
 		end
 		if not self.was_directory and pl_path.isdir(self.target) then
 			-- As per spec: "assume this is an error" without 'overwrite_directory_contents'
-			return false,
-				fmt(
-					"Cannot move file '{}' onto an existing directory '{}' without explicit directive "
-						.. "to overwrite directory contents or specifying a full target filename.",
-					self.source,
-					self.target
-				)
+			return false, "Cannot move a file onto a directory"
 		end
-	-- If source and target are both files, or both dirs, overwrite is fine.
+		-- If source and target are both files, or both dirs, overwrite is fine.
 	else -- Target does not exist
 		if not self.options.create_parent_dirs then
 			local parent_dir = pl_path.dirname(self.target)
 			if parent_dir and parent_dir ~= "" and parent_dir ~= "." and not pl_path.isdir(parent_dir) then
-				return false,
-					fmt("Parent directory of '{}' does not exist and create_parent_dirs is false.", self.target)
+				return false, "No such file or directory"
 			end
 		end
 	end
@@ -92,6 +85,14 @@ function MoveOperation:validate()
 end
 
 function MoveOperation:execute()
+	-- Ensure validation has been run
+	if self.was_directory == nil then
+		local valid, err = self:validate()
+		if not valid then
+			return false, err
+		end
+	end
+
 	local target_existed_before_move = pl_path.exists(self.target)
 	local pcall_success, pcall_err_or_val
 
@@ -142,7 +143,7 @@ function MoveOperation:execute()
 
 	-- Move
 	local move_success, move_err_msg
-	pcall_success, move_success, move_err_msg = pcall(pl_path.move, self.source, self.target)
+	pcall_success, move_success, move_err_msg = pcall(pl_file.move, self.source, self.target)
 
 	if not pcall_success then
 		return false,
@@ -155,40 +156,33 @@ function MoveOperation:execute()
 
 	-- Checksum Target (if file)
 	if not self.was_directory then
-		local cs_success, cs_result
-		pcall_success, cs_success, cs_result = pcall(Checksum.calculate_sha256, self.target)
+		local cs_success, cs_result_or_err
+		cs_success, cs_result_or_err = pcall(Checksum.calculate_sha256, self.target)
 
-		if not pcall_success then -- pcall error during checksum calculation
-			pcall(pl_path.move, self.target, self.source) -- Attempt to move back
+		if not cs_success then                   -- pcall error during checksum calculation
+			pcall(pl_file.move, self.target, self.source) -- Attempt to move back
 			return false,
 				fmt(
 					"Failed to calculate checksum for moved file '{}' (pcall error: {}). " .. "Move has been reverted.",
 					self.target,
-					tostring(cs_success)
+					tostring(cs_result_or_err)
 				)
 		end
-		if not cs_success then -- Checksum.calculate_sha256 returned nil, message
-			pcall(pl_path.move, self.target, self.source) -- Attempt to move back
+		if not cs_result_or_err then             -- Checksum.calculate_sha256 returned nil
+			pcall(pl_file.move, self.target, self.source) -- Attempt to move back
 			return false,
 				fmt(
 					"Failed to calculate checksum for moved file '{}': {}. " .. "Move has been reverted.",
 					self.target,
-					cs_result or "Checksum calculation failed"
+					"Checksum calculation failed"
 				)
 		end
 
-		self.checksum_data.final_target_checksum = cs_result
+		self.checksum_data.final_target_checksum = cs_result_or_err
 
 		if self.checksum_data.initial_source_checksum ~= self.checksum_data.final_target_checksum then
-			pcall(pl_path.move, self.target, self.source) -- Attempt to move back
-			return false,
-				fmt(
-					"Checksum mismatch for moved file '{}'. Content changed during move "
-						.. "(initial: {}, final: {}). Move has been reverted.",
-					self.target,
-					self.checksum_data.initial_source_checksum or "nil",
-					self.checksum_data.final_target_checksum or "nil"
-				)
+			pcall(pl_file.move, self.target, self.source) -- Attempt to move back
+			return false, "Checksum mismatch after move"
 		end
 	end
 
@@ -197,11 +191,15 @@ end
 
 function MoveOperation:undo()
 	if not pl_path.exists(self.target) then
-		return false, fmt("Cannot undo: item at new location '{}' does not exist.", self.target)
+		return false, fmt("Item to undo move from target '{}' does not exist.", self.target)
+	end
+
+	if pl_path.exists(self.source) then
+		return false, fmt("Cannot undo move, path '{}' already exists at original source location.", self.source)
 	end
 
 	-- Move Back
-	local move_back_pcall_ok, move_back_success, move_back_err_msg = pcall(pl_path.move, self.target, self.source)
+	local move_back_pcall_ok, move_back_success, move_back_err_msg = pcall(pl_file.move, self.target, self.source)
 
 	if not move_back_pcall_ok then
 		return false,
