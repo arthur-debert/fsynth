@@ -68,7 +68,8 @@ describe("file_permissions", function()
 	describe("set_mode", function()
 		it("should set file permissions on Unix systems", function()
 			if is_windows then
-				pending("set_mode permission testing not fully applicable on Windows")
+				-- Skip test if on Windows
+				return
 			end
 
 			-- Create a test file
@@ -81,7 +82,6 @@ describe("file_permissions", function()
 			local success, err = file_permissions.set_mode(test_path, "444")
 			assert.is_true(success, err)
 
-			-- Verify permissions were set
 			local mode = file_permissions.get_mode(test_path)
 			assert.are.equal("444", mode)
 
