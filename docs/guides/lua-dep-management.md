@@ -6,19 +6,21 @@ projects and your system-wide LuaRocks installation, while still sharing the
 main Lua runtime. This leads to more reproducible builds and avoids version
 conflicts.
 
-Assumed Project Structure:
+## Assumed Project Structure
 
 We'll assume the following project structure:
 
+```
 my_lua_project/  
-├── lib/ \# Your project's own Lua modules  
-├── specs/ \# Busted test specifications (or any test suite)  
-├── .luarocks/ \# Local, isolated LuaRocks tree for dependencies  
-├── myproject.rockspec \# Rockspec file defining dependencies (and optionally
-the project itself)  
-└── main.lua \# Example main application file
+├── .luarocks/         # Local, isolated LuaRocks tree for dependencies  
+├── fsynth-0.1.0-1.rockspec   # Rockspec file defining dependencies
+├── bin/               # Directory for utility scripts
+│   ├── luapath.sh     # Script to set up the Lua environment
+│   └── run-tests      # Script to run tests with the correct environment
+└── spec/              # Test specifications
+```
 
-Prerequisites:
+## Prerequisites
 
 - Lua: Ensure Lua is installed on your system.
 - LuaRocks: Ensure LuaRocks, the Lua package manager, is installed.
@@ -28,16 +30,19 @@ Prerequisites:
 1. Create Project Directories:  
    Navigate to where you want to create your project and set up the basic
    structure:  
+   ```bash
    mkdir my_lua_project  
    cd my_lua_project  
-   mkdir lib  
-   mkdir specs  
-   touch main.lua  
-   touch myproject.rockspec \# We'll edit this in the next step
+   mkdir spec
+   mkdir bin
+   touch myproject.rockspec  # We'll edit this in the next step
+   ```
 
 2. Create the Local Rocktree:  
    This directory will store all dependencies specific to this project.  
+   ```bash
    mkdir .luarocks
+   ```
 
    Using .luarocks makes it a hidden directory by convention.
 
@@ -49,238 +54,279 @@ its dependencies.
 
 Create or edit myproject.rockspec in your project root:
 
-\-- myproject.rockspec
+```lua
+-- myproject.rockspec
 
-package \= "myproject"  
-version \= "0.1.0-1" \-- Use "dev-1" or similar if it's just for tracking deps
+package = "myproject"  
+version = "0.1.0-1"  -- Use "dev-1" or similar if it's just for tracking deps
 
-source \= {  
- \-- If you were building this project as a rock to be installed:  
- \-- url \= "git://github.com/yourusername/my_lua_project.git",  
- \-- dir \= "my_lua_project"  
- \-- For local development, especially if just managing dependencies,  
- \-- a dummy URL is fine if 'build.type' is 'none' or if you only use '--only-deps'.
-
-url \= "/dev/null", \-- Placeholder  
+source = {  
+   -- For local development, a placeholder URL is fine
+   url = "."
 }
 
-description \= {  
- summary \= "My Awesome Lua Project using isolated dependencies.",  
- detailed \= \[\[  
- This project demonstrates how to set up an isolated LuaRocks  
- environment for managing dependencies.  
- \]\],  
- homepage \= "https_your_project_homepage_com", \-- Optional  
- license \= "MIT" \-- Or your chosen license  
+description = {  
+   summary = "My Awesome Lua Project using isolated dependencies.",  
+   detailed = [[
+      This project demonstrates how to set up an isolated LuaRocks  
+      environment for managing dependencies.  
+   ]],  
+   homepage = "https://your_project_homepage.com",  -- Optional  
+   license = "MIT"  -- Or your chosen license  
 }
 
-\-- Define your project's dependencies here  
-dependencies \= {  
- "lua \>= 5.1", \-- Specify Lua version compatibility  
- "penlight \>= 1.13.0", \-- Example: Penlight library  
- "lua-cjson \>= 2.1.0", \-- Example: Lua CJSON library  
- "busted \>= 2.0" \-- Example: Busted testing framework (if you want it
-project-local)  
+-- Define your project's dependencies here  
+dependencies = {  
+   "lua >= 5.1",  -- Specify Lua version compatibility  
+   "penlight >= 1.5.0",  -- Example: Penlight library
+   "log.lua >= 0.1.0",   -- Example: Logging library
 }
 
-\-- Build instructions  
-\-- If this rockspec is \*only\* for listing dependencies and not for building
-'myproject' itself as a rock:  
-\-- build \= {  
-\-- type \= "none"  
-\-- }
-
-\-- If you intend for this rockspec to also define how 'myproject' itself could
-be installed (e.g., its modules from \`lib/\`):  
-build \= {  
- type \= "builtin", \-- Common type for Lua modules  
- modules \= {  
- \-- Example: if you have my_lua_project/lib/core.lua  
- \-- \["myproject.core"\] \= "lib/core.lua",  
- \-- Example: if you have my_lua_project/lib/utils/init.lua for a module 'utils'
-
-\-- \["myproject.utils"\] \= "lib/utils/init.lua"  
- }  
+-- For test dependencies
+test_dependencies = {
+   "busted >= 2.0.0"  -- Testing framework
 }
+
+-- Build instructions  
+build = {  
+   type = "builtin",  -- Common type for Lua modules  
+   modules = {  
+      -- Example: if you have my_lua_project/myproject/core.lua  
+      ["myproject.core"] = "myproject/core.lua",
+      -- Add all your modules here
+   }  
+}
+```
 
 Key part: The dependencies table lists all external Lua libraries your project
-needs.
+needs, while test_dependencies lists libraries needed only for testing.
 
 ## Step 3: Installing Dependencies into the Local Tree
 
-With your .luarocks directory and myproject.rockspec ready, you can install the
+With your .luarocks directory and rockspec ready, you can install the
 defined dependencies.
 
 1. From the Rockspec:
 
-   - If your rockspec also defines your project and you want to "install" it
-     locally (useful if it has build.modules defined) along with its
-     dependencies:  
-     luarocks \--tree ./.luarocks make myproject.rockspec
+   - Installing the dependencies listed in the rockspec:  
+     ```bash
+     luarocks --tree ./.luarocks install --only-deps rockspec_file.rockspec
+     ```
 
-   - If you _only_ want to install the dependencies listed in the rockspec and
-     not build/install the main package described by the rockspec itself:  
-     luarocks \--tree ./.luarocks install \--only-deps myproject.rockspec
+   - Installing the project itself along with its dependencies (useful during development):  
+     ```bash
+     luarocks --tree ./.luarocks make rockspec_file.rockspec
+     ```
 
-The \--tree ./.luarocks flag tells LuaRocks to use your project-local directory
-for installation.
+   The `--tree ./.luarocks` flag tells LuaRocks to use your project-local directory
+   for installation, keeping dependencies isolated from the system-wide installation.
 
 2. Installing Individual Rocks (Ad-hoc):  
-   If you need to add a dependency not yet in your rockspec, or just want to
-   install one quickly:  
-   luarocks \--tree ./.luarocks install \<rockname\>  
-   \# Example:  
-   \# luarocks \--tree ./.luarocks install middleclass
+   If you need to add a dependency not yet in your rockspec:  
+   ```bash
+   luarocks --tree ./.luarocks install <rockname>
+   ```
 
-   Remember to add it to your myproject.rockspec later for reproducibility.
+   Example:  
+   ```bash
+   luarocks --tree ./.luarocks install penlight
+   ```
+
+   Remember to add it to your rockspec file later for reproducibility.
 
 ## Step 4: Configuring the Lua Environment (LUA_PATH and LUA_CPATH)
 
-For Lua to find your project's own modules (in lib/) and the dependencies in
-.luarocks/, you need to correctly set the LUA_PATH (for Lua modules) and
-LUA_CPATH (for C modules) environment variables.
+For Lua to find your project's own modules and the dependencies in
+.luarocks/, you need to correctly set the LUA_PATH and LUA_CPATH
+environment variables.
 
-The recommended way is to create a helper script or set these in your shell
-before running your project.
+The recommended way is to create a helper script in your bin directory.
+Here's an example of what that script should do:
 
 1. Generate Paths from Local Rocktree:  
    LuaRocks can tell you the paths needed for your local tree:  
-   eval $(luarocks \--tree ./.luarocks path)
+   ```bash
+   eval $(luarocks --tree ./.luarocks path)
+   ```
 
-   This command executes the output of luarocks path, which typically exports
-   LUA_PATH and LUA_CPATH pointing to your ./.luarocks tree. These paths are
-   usually prepended, giving them priority over system paths.
+   This command executes the output of luarocks path, which exports
+   LUA_PATH and LUA_CPATH pointing to your ./.luarocks tree.
 
-2. Add Your Project's lib Directory:  
-   You also need to tell Lua where to find your project's own modules (e.g.,
-   those in the lib/ directory). You should prepend these paths to LUA_PATH so
-   they are checked before the rocktree dependencies or system paths.  
-   Combined approach (recommended for a script):  
-   First, set up paths for the local rocktree, then prepend your project's lib
-   path.  
-   \# In your project root, or use absolute paths in scripts
-
-   \# 1\. Set up paths for .luarocks  
-   eval $(luarocks \--tree "$(pwd)/.luarocks" path)
-
-   \# 2\. Prepend your project's 'lib' directory to LUA_PATH  
-   \# \`?.lua\` finds files like \`lib/foo.lua\` for \`require('foo')\`  
-   \# \`?/init.lua\` finds modules structured as directories like
-   \`lib/bar/init.lua\` for \`require('bar')\`  
-   export LUA_PATH="$(pwd)/lib/?.lua;$(pwd)/lib/?/init.lua;$LUA_PATH"
-
-   \# LUA_CPATH is usually handled correctly by \`luarocks path\` for C modules
-   in .luarocks.  
-   \# If your \`lib/\` directory also contained self-compiled C modules not
-   managed by LuaRocks,  
-   \# you'd prepend to LUA_CPATH similarly:  
-   \# export LUA_CPATH="$(pwd)/lib/?.so;$LUA_CPATH" \# (.so for Linux, .dylib
-   for macOS, .dll for Windows)
+2. Add Your Project's Main Directories:  
+   You also need to tell Lua where to find your project's own modules:
+   
+   ```bash
+   # Prepend your project's module directories to LUA_PATH
+   export LUA_PATH="$(pwd)/?.lua;$(pwd)/your_module/?.lua;$(pwd)/your_module/?/init.lua;$LUA_PATH"
+   
+   # Add the spec directory for testing
+   export LUA_PATH="$(pwd)/spec/?.lua;$LUA_PATH"
+   
+   # Add .luarocks/bin to PATH for tools installed by LuaRocks
+   export PATH="$(pwd)/.luarocks/bin:$PATH"
+   ```
 
 Path Order Importance:  
 The resulting search order for require() will be roughly:
 
-1. Your project's lib/ directory.
-2. Your project's local .luarocks/ tree.
-3. System-wide Lua/LuaRocks paths.
+1. Your project's main module directories.
+2. Your project's spec directory (if added).
+3. Your project's local .luarocks/ tree.
+4. System-wide Lua/LuaRocks paths.
 
 ## Step 5: Running Your Project and Tests
 
 Once the environment variables LUA_PATH and LUA_CPATH are correctly set (as per
-Step 4):
+Step 4), you can run your application and tests.
 
-1. Running Your Main Application File (main.lua):  
-   Assuming main.lua is in your project root and requires modules from lib/ or
-   your installed dependencies:  
-   \# Ensure environment is set up first\!  
+1. Running Your Main Application File:  
+   Assuming main.lua is in your project root:  
+   ```bash
+   # Ensure environment is set up first!
+   source ./bin/luapath.sh
    lua main.lua
+   ```
 
 2. Running Busted Tests:
 
-   - Ensure Busted is installed: It could be global, or you could have installed
-     it into your local .luarocks tree (e.g., by adding "busted" to your
-     rockspec's dependencies).
-   - Run tests:  
-     \# Ensure environment is set up first\!
+   - Add busted to your rockspec's test_dependencies.
+   - Install it with:  
+     ```bash
+     luarocks --tree ./.luarocks install --only-deps rockspec_file.rockspec
+     ```
+   - Run tests using the helper script:
+     ```bash
+     ./bin/run-tests
+     ```
+     
+   - Or manually:
+     ```bash
+     # First source the environment setup
+     source ./bin/luapath.sh
+     
+     # Then run busted (using the function defined in luapath.sh)
+     run_busted
+     ```
 
-     \# If Busted is globally available or its path was added by \`luarocks
-     path\`:  
-     busted
+## Step 6: Helper Scripts for Environment Setup
 
-     \# Or specify the specs directory:  
-     busted specs/
+To avoid manually setting environment variables every time, create helper scripts
+in your project's bin directory.
 
-     \# If Busted was installed locally into ./.luarocks and its bin isn't on
-     PATH:  
-     ./.luarocks/bin/busted specs/
+### Environment Setup Script (bin/luapath.sh)
 
-## Step 6: Helper Script for Environment Setup (Recommended)
+```bash
+#!/bin/bash
 
-To avoid manually setting environment variables every time, create a helper
-script in your project root (e.g., env.sh or project_env.sh).
+# Source this script to set up the Lua environment for your project
+# Usage: source ./bin/luapath.sh
 
-Example: env.sh
-
-\#\!/bin/bash  
-\# env.sh \- Sets up the Lua environment for this project.  
-\# Usage: source ./env.sh  
-\# After sourcing, the Lua paths will be set in your current shell.
-
-\# Get the absolute path to the project root (where this script is located)  
-PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE\[0\]}")" && pwd)"
-
-echo "Setting up Lua environment for project at ${PROJECT_ROOT}"
-
-\# Check if luarocks command exists  
-if \! command \-v luarocks &\> /dev/null  
-then  
- echo "Error: luarocks command could not be found. Please ensure it's installed and
-in your PATH."  
- return 1 \# Use return for sourced scripts  
+# Get the absolute path to the project root
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+    echo "This script should be sourced, not executed directly."
+    echo "Usage: source ./bin/luapath.sh"
+    exit 1
 fi
 
-\# 1\. Configure LuaRocks to use the local tree and export paths  
-\# The \`eval\` command executes the shell commands output by \`luarocks
-path\`.  
-eval $("$(which luarocks)" \--tree "${PROJECT_ROOT}/.luarocks" path)
+# Get the directory where the script is located
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+PROJECT_ROOT="$( cd "${SCRIPT_DIR}/.." && pwd )"
+PACKAGE_NAME="your_package_name"
 
-\# 2\. Prepend project's 'lib' directory to LUA_PATH  
-\# This ensures local project modules are found before dependencies or system
-modules.  
-export
-LUA_PATH="${PROJECT\_ROOT}/lib/?.lua;${PROJECT_ROOT}/lib/?/init.lua;$LUA_PATH"
+# Check if luarocks is installed
+if ! command -v luarocks &>/dev/null; then
+    echo "luarocks command could not be found. Please ensure it's installed"
+    echo "and in your PATH."
+    return 1
+fi
 
-\# Optional: If your project's 'lib' directory also directly contains C modules
-(not typical):  
-\# export LUA_CPATH="${PROJECT\_ROOT}/lib/?.so;${LUA_CPATH}" \# Adjust .so for
-your OS
+# Configure LuaRocks to use the local tree and export paths
+eval $("$(which luarocks)" --tree "${PROJECT_ROOT}/.luarocks" path)
 
-echo "LUA_PATH set to: $LUA\_PATH"  
-if \[ \-n "$LUA_CPATH" \]; then  
- echo "LUA_CPATH set to: $LUA_CPATH"  
-fi  
-echo "Environment configured. You can now run your Lua scripts or Busted."
+# Prepend project's module directories to LUA_PATH
+export LUA_PATH="${PROJECT_ROOT}/?.lua;${PROJECT_ROOT}/${PACKAGE_NAME}/?.lua;${PROJECT_ROOT}/${PACKAGE_NAME}/?/init.lua;$LUA_PATH"
 
-How to use the helper script:
+# Add spec directory to LUA_PATH for testing
+export LUA_PATH="${PROJECT_ROOT}/spec/?.lua;$LUA_PATH"
 
-1. Make it executable:  
-   chmod \+x env.sh
+# Add .luarocks/bin to PATH
+export PATH="${PROJECT_ROOT}/.luarocks/bin:$PATH"
 
-2. Source it in your current terminal session:  
-   source ./env.sh
+# Define a function to run busted tests
+run_busted() {
+    local busted_path="${PROJECT_ROOT}/.luarocks/bin/busted"
+    if [ -x "$busted_path" ]; then
+        echo "Running tests using local busted installation..."
+        "${busted_path}" "$@"
+    elif command -v busted &>/dev/null; then
+        echo "Running tests using global busted installation..."
+        busted "$@"
+    else
+        echo "Error: busted could not be found. Please install it using luarocks."
+        return 1
+    fi
+}
 
-   Now, LUA_PATH and LUA_CPATH are set for the current session. You can run lua
-   main.lua or busted specs/ directly.
+echo "Lua environment for ${PACKAGE_NAME} is now set up:"
+echo "- LUA_PATH: $LUA_PATH"
+echo "- LUA_CPATH: $LUA_CPATH"
+echo "- Local busted is available via the 'run_busted' function"
+```
 
-You could also create a run_tests.sh or run_app.sh script that sources env.sh
-(or includes its logic) and then executes the command.
+### Test Runner Script (bin/run-tests)
+
+```bash
+#!/bin/bash
+
+# Run tests for your project using the local LuaRocks installation
+
+# Get the directory where the script is located
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+PROJECT_ROOT="$( cd "${SCRIPT_DIR}/.." && pwd )"
+
+# Source the environment setup script
+source "${SCRIPT_DIR}/luapath.sh"
+
+# Set test mode environment variable if needed
+export PROJECT_TEST_MODE=1
+
+# Run the tests
+echo "Running tests..."
+run_busted "$@"
+```
+
+Make these scripts executable:
+
+```bash
+chmod +x bin/luapath.sh bin/run-tests
+```
+
+### Usage
+
+1. To set up the environment for development:
+   ```bash
+   source ./bin/luapath.sh
+   ```
+
+2. To run tests:
+   ```bash
+   ./bin/run-tests
+   ```
 
 ## Conclusion
 
 By following this setup, you create a robust and isolated environment for your
-Lua project. Each project can have its own set of dependency versions managed in
-its local .luarocks tree, preventing conflicts and making your project more
-portable and easier for others (and your future self) to set up and run. The key
-is consistently using the \--tree flag for LuaRocks operations and correctly
-configuring LUA_PATH and LUA_CPATH to recognize both your project's libraries
-and its isolated dependencies.
+Lua project. Each project has its own set of dependency versions managed in its
+local .luarocks tree, preventing conflicts and making your project more portable
+and easier to set up.
+
+Key points:
+
+1. Install project dependencies in a local `.luarocks` directory
+2. Use helper scripts (`bin/luapath.sh` and `bin/run-tests`) to set up the environment and run tests
+3. Configure `.busted` file for test settings
+4. Add test dependencies to the rockspec file
+
+This approach ensures that your development environment is consistent and
+reproducible, making it easier to collaborate with others and maintain your
+project over time.

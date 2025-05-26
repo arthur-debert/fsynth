@@ -163,7 +163,7 @@ c. Testing Commands
 7. Dependencies and LuaRocks
 -----------------------------
 
-Fsynth uses LuaRocks for dependency management. Always use LuaRocks to install, update, or remove dependencies to ensure consistent behavior across development and deployment environments.
+Fsynth uses LuaRocks for dependency management with project-isolated dependencies stored in a .luarocks directory tree. This approach keeps the project's dependencies separate from system-wide installations, preventing version conflicts and ensuring reproducible builds.
 
 a. REQUIRED DEPENDENCIES
    - lua >= 5.1
@@ -174,19 +174,24 @@ a. REQUIRED DEPENDENCIES
 b. TEST DEPENDENCIES
    - busted >= 2.0.0
 
-c. COMMON LUAROCKS COMMANDS
+c. ENVIRONMENT SETUP SCRIPTS
+
+   # Setup Lua environment (adds paths to dependencies)
+   source ./bin/luapath.sh
+
+   # Run tests with the correct environment
+   ./bin/run-tests
+
+d. COMMON LUAROCKS COMMANDS
 
    # Installing all dependencies from the rockspec file
-   luarocks install --local
+   luarocks --tree ./.luarocks install --only-deps
 
    # Installing the package in development mode
-   luarocks make --local
-
-   # Cleaning dependencies (to test fresh install)
-   luarocks purge --force
+   luarocks --tree ./.luarocks make
 
    # Adding a new dependency
-   luarocks install --local new_package
+   luarocks --tree ./.luarocks install new_package
    # Then update the rockspec file to include the dependency:
    #   dependencies = {
    #      "lua >= 5.1",
@@ -194,14 +199,12 @@ c. COMMON LUAROCKS COMMANDS
    #      "new_package >= 1.0.0"
    #   }
 
-   # Listing installed packages
-   luarocks list
-
-   # Testing with busted
-   luarocks test
+   # Listing installed packages in the local tree
+   luarocks --tree ./.luarocks list
 
    # Installing a specific version of a package
-   luarocks install --local log.lua 0.1.0-1
+   luarocks --tree ./.luarocks install log.lua 0.1.0-1
 
-   # Removing a package
+   # Removing a package from the local tree
+   luarocks --tree ./.luarocks remove package_name
    luarocks remove log.lua
