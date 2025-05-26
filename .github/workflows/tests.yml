@@ -1,0 +1,46 @@
+name: Run Tests
+
+on:
+  push:
+    branches: [ '**' ]
+  pull_request:
+    branches: [ '**' ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Cache OS dependencies
+      id: cache-os-deps
+      uses: actions/cache@v3
+      with:
+        path: /var/cache/apt/archives
+        key: ${{ runner.os }}-apt-${{ hashFiles('.github/workflows/tests.yml') }}
+        restore-keys: |
+          ${{ runner.os }}-apt-
+    
+    - name: Install OS dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y lua5.4 luarocks direnv
+    
+    - name: Cache Lua dependencies
+      id: cache-lua-deps
+      uses: actions/cache@v3
+      with:
+        path: .luarocks
+        key: ${{ runner.os }}-luarocks-${{ hashFiles('fsynth-0.1.0-1.rockspec') }}
+        restore-keys: |
+          ${{ runner.os }}-luarocks-
+    
+    - name: Install Lua dependencies
+      if: steps.cache-lua-deps.outputs.cache-hit != 'true'
+      run: |
+        luarocks --tree ./.luarocks install --only-deps fsynth-0.1.0-1.rockspec
+    
+    - name: Run tests
+      run: |
+        direnv allow && busted
