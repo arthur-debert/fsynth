@@ -1,9 +1,36 @@
 -- Tests for the CopyFileOperation
 local CopyFileOperation = require("fsynth.operations.copy_file")
 local pl_file = require("pl.file")
+local pl_path = require("pl.path") -- Added
 local helper = require("spec.spec_helper")
+local file_permissions = require("fsynth.file_permissions") -- Added
 -- always use the log module, no prints
 local log = require("fsynth.log")
+
+local is_windows = pl_path.sep == '\\\\' -- Added
+
+-- Helper function to create a file with specific content and mode
+local function create_test_file(path, content, mode)
+	assert(pl_file.write(path, content), "Failed to write test file: " .. path)
+	if mode then
+		local ok, err = file_permissions.set_mode(path, mode)
+		assert(ok, "Failed to set mode '" .. mode .. "' on test file '" .. path .. "': " .. tostring(err))
+	end
+	-- Verify mode after setting, for robustness of helper
+	if mode and not is_windows then -- On windows, set_mode might result in different get_mode (e.g. 777 -> 666)
+		local actual_mode, _ = file_permissions.get_mode(path)
+		if actual_mode ~= mode then
+			log.warn("Helper create_test_file: mode set to %s but got %s for %s", mode, actual_mode, path)
+		end
+	elseif mode and is_windows then -- check for 444 or 666
+		local actual_mode, _ = file_permissions.get_mode(path)
+		if (mode == "444" and actual_mode ~= "444") or (mode ~= "444" and actual_mode ~= "666") then
+			log.warn("Helper create_test_file (Win): mode set to %s but got %s for %s", mode, actual_mode, path)
+		end
+	end
+	return path
+end
+
 
 describe("CopyFileOperation", function()
 	-- Set up test environment
@@ -113,6 +140,179 @@ describe("CopyFileOperation", function()
 		local target_content = pl_file.read(target)
 		assert.are.equal(content, target_content)
 	end)
+
+	describe("permission handling", function()
+		local source_content = "permissions test content"
+
+		it("should preserve attributes by default (Unix-like check: specific mode)", function()
+			if is_windows then
+				pending("Skipping Unix-like attribute preservation test on Windows. Windows preservation is different.")
+				return
+			end
+			local tmp_dir = helper.get_tmp_dir()
+			local source_path = pl_path.join(tmp_dir, "source_preserve.txt")
+			local target_path = pl_path.join(tmp_dir, "target_preserve.txt")
+			create_test_file(source_path, source_content, "444") -- read-only for owner
+
+			local op = CopyFileOperation.new(source_path, target_path) -- preserve_attributes = true by default
+			local valid, err_v = op:validate()
+			assert.is_true(valid, "Validation failed: " .. tostring(err_v))
+			local success, err_e = op:execute()
+			assert.is_true(success, "Execute failed: " .. tostring(err_e))
+
+			local target_mode, err_m = file_permissions.get_mode(target_path)
+			assert.is_not_nil(target_mode, "Failed to get target mode: " .. tostring(err_m))
+			assert.are.equal("444", target_mode, "Target mode should be preserved as 444")
+		end)
+
+		it("should preserve read-only attribute on Windows when preserve_attributes is true (default)", function()
+			if not is_windows then
+				pending("Skipping Windows read-only preservation test on non-Windows.")
+				return
+			end
+			local tmp_dir = helper.get_tmp_dir()
+			local source_path = pl_path.join(tmp_dir, "source_preserve_win.txt")
+			local target_path = pl_path.join(tmp_dir, "target_preserve_win.txt")
+			create_test_file(source_path, source_content, "444") -- set to read-only
+
+			local op = CopyFileOperation.new(source_path, target_path, { preserve_attributes = true })
+			local valid, err_v = op:validate()
+			assert.is_true(valid, "Validation failed: " .. tostring(err_v))
+			local success, err_e = op:execute()
+			assert.is_true(success, "Execute failed: " .. tostring(err_e))
+
+			local target_mode, err_m = file_permissions.get_mode(target_path)
+			assert.is_not_nil(target_mode, "Failed to get target mode: " .. tostring(err_m))
+			assert.are.equal("444", target_mode, "Target mode should be preserved as 444 (read-only) on Windows")
+			local writable, _ = file_permissions.is_writable(target_path)
+			assert.is_false(writable, "Target file should be read-only (not writable)")
+		end)
+
+		it("should use default attributes if preserve_attributes is false (Unix-like check)", function()
+			if is_windows then
+				pending("Skipping Unix-like default attribute test on Windows.")
+				return
+			end
+			local tmp_dir = helper.get_tmp_dir()
+			local source_path = pl_path.join(tmp_dir, "source_no_preserve.txt")
+			local target_path = pl_path.join(tmp_dir, "target_no_preserve.txt")
+			create_test_file(source_path, source_content, "400") -- very restrictive: r--------
+
+			local op = CopyFileOperation.new(source_path, target_path, { preserve_attributes = false })
+			local valid, err_v = op:validate()
+			assert.is_true(valid, "Validation failed: " .. tostring(err_v))
+			local success, err_e = op:execute()
+			assert.is_true(success, "Execute failed: " .. tostring(err_e))
+
+			local target_mode, err_m = file_permissions.get_mode(target_path)
+			assert.is_not_nil(target_mode, "Failed to get target mode: " .. tostring(err_m))
+			-- Default mode is often 666 minus umask (e.g. 644 if umask is 022).
+			-- We can't assert exact default, but it should NOT be "400".
+			-- And it should typically be writable by owner.
+			assert.are_not.equal("400", target_mode, "Target mode should not be the restrictive source mode")
+			local owner_digit_str = target_mode:sub(1,1)
+			local owner_digit = tonumber(owner_digit_str)
+			assert.is_not_nil(owner_digit, "Owner digit of target mode is not a number: " .. owner_digit_str)
+			assert.is_true(owner_digit >= 6, "Target should typically be owner-writable by default (mode " .. target_mode .. ")")
+		end)
+
+		it("should apply options.mode to target, overriding source/preserved attributes (Unix-like)", function()
+			if is_windows then
+				pending("Skipping Unix-like mode override test on Windows.")
+				return
+			end
+			local tmp_dir = helper.get_tmp_dir()
+			local source_path = pl_path.join(tmp_dir, "source_override.txt")
+			local target_path = pl_path.join(tmp_dir, "target_override.txt")
+			create_test_file(source_path, source_content, "444") -- source is read-only
+
+			local op = CopyFileOperation.new(source_path, target_path, { mode = "777", preserve_attributes = true })
+			local valid, err_v = op:validate()
+			assert.is_true(valid, "Validation failed: " .. tostring(err_v))
+			local success, err_e = op:execute()
+			assert.is_true(success, "Execute failed: " .. tostring(err_e))
+
+			local target_mode, err_m = file_permissions.get_mode(target_path)
+			assert.is_not_nil(target_mode, "Failed to get target mode: " .. tostring(err_m))
+			assert.are.equal("777", target_mode, "Target mode should be overridden to 777")
+		end)
+
+		it("should apply options.mode to target on Windows (e.g., make writable from read-only source)", function()
+			if not is_windows then
+				pending("Skipping Windows mode override test on non-Windows.")
+				return
+			end
+			local tmp_dir = helper.get_tmp_dir()
+			local source_path = pl_path.join(tmp_dir, "source_override_win.txt")
+			local target_path = pl_path.join(tmp_dir, "target_override_win.txt")
+			create_test_file(source_path, source_content, "444") -- source is read-only (mode "444")
+
+			-- mode "666" should make it writable
+			local op = CopyFileOperation.new(source_path, target_path, { mode = "666", preserve_attributes = true })
+			local valid, err_v = op:validate()
+			assert.is_true(valid, "Validation failed: " .. tostring(err_v))
+			local success, err_e = op:execute()
+			assert.is_true(success, "Execute failed: " .. tostring(err_e))
+
+			local target_mode, err_m = file_permissions.get_mode(target_path)
+			assert.is_not_nil(target_mode, "Failed to get target mode: " .. tostring(err_m))
+			assert.are.equal("666", target_mode, "Target mode should be overridden to 666 (writable)")
+			local writable, _ = file_permissions.is_writable(target_path)
+			assert.is_true(writable, "Target file should be writable")
+		end)
+
+		it("should fail validation if source file is not readable (Unix-like)", function()
+			if is_windows then
+				-- On Windows, readability checks are different. A file might be "readable"
+				-- by owner even if all permissions are stripped via cacls for others.
+				-- The current is_readable on Windows uses io.open("rb").
+				pending("Skipping non-readable source test on Windows (permission model differs significantly for this check).")
+				return
+			end
+			local tmp_dir = helper.get_tmp_dir()
+			local source_path = pl_path.join(tmp_dir, "source_unreadable.txt")
+			local target_path = pl_path.join(tmp_dir, "target_unreadable.txt")
+			create_test_file(source_path, "unreadable", "000") -- --- (no permissions for owner)
+
+			local op = CopyFileOperation.new(source_path, target_path)
+			local valid, err = op:validate()
+			assert.is_false(valid)
+			assert.match("Source file '.+' is not readable", err, "Error message mismatch. Got: " .. tostring(err))
+		end)
+
+		it("should fail execute if target directory is not writable (Unix-like)", function()
+			if is_windows then
+				pending("Skipping non-writable target dir test on Windows (permission model differs for directory writability setup).")
+				return
+			end
+			local tmp_dir = helper.get_tmp_dir()
+			local source_path = pl_path.join(tmp_dir, "source_to_bad_target_dir.txt")
+			create_test_file(source_path, "content", "644")
+
+			local non_writable_target_parent_str = pl_path.join(tmp_dir, "non_writable_target_parent")
+			assert.is_true(pl_path.mkdir(non_writable_target_parent_str), "Failed to create parent for test")
+			-- Set parent to r-x------ (owner cannot write into it)
+			local mode_set_ok, mode_set_err = file_permissions.set_mode(non_writable_target_parent_str, "500")
+			assert.is_true(mode_set_ok, "Failed to set parent dir to non-writable: " .. tostring(mode_set_err))
+
+			-- Verify parent is indeed not writable for our user
+			local parent_writable, parent_writable_err = file_permissions.is_writable(non_writable_target_parent_str)
+			assert.is_false(parent_writable, "Parent directory '" .. non_writable_target_parent_str .. "' should be non-writable for the test to be valid. Error: " .. tostring(parent_writable_err))
+
+			local target_path = pl_path.join(non_writable_target_parent_str, "target.txt")
+			local op = CopyFileOperation.new(source_path, target_path, { create_parent_dirs = false })
+
+			local valid, err_v = op:validate()
+			assert.is_true(valid, "Validation failed unexpectedly: " .. tostring(err_v)) -- Validation passes, execute should fail
+
+			local success, err_e = op:execute()
+			assert.is_false(success)
+			assert.match("Target parent dir '.+' not writable", err_e, "Error message mismatch. Got: " .. tostring(err_e))
+
+			-- Cleanup: try to make parent writable again
+			pcall(file_permissions.set_mode, non_writable_target_parent_str, "700")
+		end)
+	end) -- end describe "permission handling"
 
 	it("should create parent directories when option is set", function()
 		local tmp_dir = helper.get_tmp_dir()

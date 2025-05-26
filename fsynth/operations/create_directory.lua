@@ -4,6 +4,7 @@ local log = require("fsynth.log")
 local pl_path = require("pl.path")
 local pl_dir = require("pl.dir")
 local fmt = require("string.format.all")
+local file_permissions = require("fsynth.file_permissions")
 -- os.remove for undo, or pl_dir.rmdir
 
 ---------------------------------------------------------------------
@@ -21,6 +22,13 @@ function CreateDirectoryOperation.new(dir_path, options)
 	self.options.exclusive = self.options.exclusive or false
 	-- Default create_parent_dirs to true if not specified
 	self.options.create_parent_dirs = self.options.create_parent_dirs == nil and true or self.options.create_parent_dirs
+
+	-- Directory permissions mode to set after creation (e.g., "755", "700" on Unix-like systems).
+	-- If nil, system default permissions are used.
+	-- Note: On Windows, setting specific directory modes like "555" (to prevent content creation)
+	-- via this library's `file_permissions.set_mode` might not have the same restrictive effect as on Unix
+	-- due to differences in underlying OS permission models and the simplification in `set_mode` for Windows.
+	self.options.mode = self.options.mode
 
 	self.dir_actually_created_by_this_op = false
 	return self
@@ -65,6 +73,31 @@ function CreateDirectoryOperation:execute()
 	local err_msg
 	local path_existed_as_dir_before_op = pl_path.isdir(self.target)
 
+	-- Check writability of parent directory
+	local parent_dir_path = pl_path.dirname(self.target)
+	if parent_dir_path == "" or parent_dir_path == "." then
+		parent_dir_path = "." -- Current directory
+	end
+
+	if pl_path.exists(parent_dir_path) and pl_path.isdir(parent_dir_path) then
+		local writable, write_err = file_permissions.is_writable(parent_dir_path)
+		if not writable then
+			err_msg = fmt(
+				"Parent directory '{}' is not writable. Error: {}",
+				parent_dir_path,
+				write_err or "permission denied"
+			)
+			log.error(err_msg)
+			return false, err_msg
+		end
+	elseif not self.options.create_parent_dirs then
+		-- Parent doesn't exist and we are not allowed to create it
+		err_msg = fmt("Parent directory '{}' does not exist and create_parent_dirs is false", parent_dir_path)
+		log.error(err_msg)
+		return false, err_msg
+	end
+	-- If parent_dir_path does not exist but create_parent_dirs is true, makepath will handle it.
+
 	if path_existed_as_dir_before_op and not self.options.exclusive then
 		log.info("Directory already exists, no need to create: %s", self.target)
 		self.dir_actually_created_by_this_op = false
@@ -93,6 +126,18 @@ function CreateDirectoryOperation:execute()
 			-- makepath succeeded
 			self.dir_actually_created_by_this_op = not path_existed_as_dir_before_op
 			log.info("Directory successfully created: %s", self.target)
+			
+			-- Apply specified permissions if provided
+			if self.options.mode then
+				log.debug("Setting permissions on created directory to: %s", self.options.mode)
+				local perm_ok, perm_err = file_permissions.set_mode(self.target, self.options.mode)
+				if not perm_ok then
+					log.warn("Failed to set permissions on created directory: %s", perm_err)
+					-- We don't fail the operation if setting permissions fails
+					-- Just log a warning
+				end
+			end
+			
 			return true
 		elseif not pcall_success then
 			err_msg =
@@ -112,6 +157,18 @@ function CreateDirectoryOperation:execute()
 			-- mkdir succeeded (returns true on success)
 			self.dir_actually_created_by_this_op = true
 			log.info("Directory successfully created: %s", self.target)
+			
+			-- Apply specified permissions if provided
+			if self.options.mode then
+				log.debug("Setting permissions on created directory to: %s", self.options.mode)
+				local perm_ok, perm_err = file_permissions.set_mode(self.target, self.options.mode)
+				if not perm_ok then
+					log.warn("Failed to set permissions on created directory: %s", perm_err)
+					-- We don't fail the operation if setting permissions fails
+					-- Just log a warning
+				end
+			end
+			
 			return true
 		elseif not pcall_success then
 			err_msg =

@@ -1,8 +1,10 @@
 local helper = require("spec.spec_helper")
 local CreateFileOperation = require("fsynth.operations.create_file")
-local Checksum = require("fsynth.checksum")
+local file_permissions = require("fsynth.file_permissions") -- Added
 local pl_path = require("pl.path")
 local pl_file = require("pl.file") -- Updated import - using file instead of fs
+
+local is_windows = pl_path.sep == '\\\\' -- Added
 
 describe("CreateFileOperation", function()
 	local tmp_dir
@@ -50,6 +52,82 @@ describe("CreateFileOperation", function()
 			assert.is_not_nil(op.checksum_data.target_checksum)
 		end)
 
+		describe("options.mode (permissions)", function()
+			it("should create a new file with specified permissions (Unix-like mode)", function()
+				if is_windows then
+					pending("Skipping Unix-like mode test on Windows")
+					return
+				end
+				local file_path_str = pl_path.join(tmp_dir, "new_file_with_mode.txt")
+				local op = CreateFileOperation.new(file_path_str, { content = "mode test", mode = "755" })
+				local success, err = op:execute()
+				assert.is_true(success, err)
+				assert.are.equal(file_path_str, pl_path.exists(file_path_str))
+				local current_mode, mode_err = file_permissions.get_mode(file_path_str)
+				assert.is_not_nil(current_mode, mode_err)
+				assert.are.equal("755", current_mode)
+			end)
+
+			it("should create a new file and set it to read-only (platform-agnostic check via get_mode)", function()
+				local file_path_str = pl_path.join(tmp_dir, "new_file_readonly.txt")
+				-- "444" should make it read-only on Unix, and interpreted as read-only on Windows by our logic
+				local op = CreateFileOperation.new(file_path_str, { content = "mode test", mode = "444" })
+				local success, err = op:execute()
+				assert.is_true(success, err)
+				assert.are.equal(file_path_str, pl_path.exists(file_path_str))
+				local current_mode, mode_err = file_permissions.get_mode(file_path_str)
+				assert.is_not_nil(current_mode, mode_err)
+				assert.are.equal("444", current_mode) -- file_permissions.get_mode returns "444" for read-only
+
+				local writable, write_check_err = file_permissions.is_writable(file_path_str)
+				assert.is_not_nil(writable, write_check_err)
+				assert.is_false(writable, "File should be read-only (not writable)")
+			end)
+
+			it("should create a new file and set it to writable (platform-agnostic check via get_mode)", function()
+				local file_path_str = pl_path.join(tmp_dir, "new_file_writable.txt")
+				-- "666" should make it writable
+				local op = CreateFileOperation.new(file_path_str, { content = "mode test", mode = "666" })
+				local success, err = op:execute()
+				assert.is_true(success, err)
+				assert.are.equal(file_path_str, pl_path.exists(file_path_str))
+				local current_mode, mode_err = file_permissions.get_mode(file_path_str)
+				assert.is_not_nil(current_mode, mode_err)
+				assert.are.equal("666", current_mode) -- file_permissions.get_mode returns "666" for writable
+
+				local writable, write_check_err = file_permissions.is_writable(file_path_str)
+				assert.is_not_nil(writable, write_check_err)
+				assert.is_true(writable, "File should be writable")
+			end)
+		end)
+
+		it("should fail to create a file if parent directory is not writable (Unix-like)", function()
+			if is_windows then
+				pending("Skipping parent non-writable test on Windows due to complexity of setting up reliable non-writable parent for current user.")
+				return
+			end
+			local non_writable_parent_str = pl_path.join(tmp_dir, "non_writable_parent")
+			assert.is_true(pl_path.mkdir(non_writable_parent_str), "Failed to create parent for test")
+			-- Set parent to r-x------ (owner cannot write)
+			local mode_set_ok, mode_set_err = file_permissions.set_mode(non_writable_parent_str, "500")
+			assert.is_true(mode_set_ok, "Failed to set parent dir to non-writable: " .. tostring(mode_set_err))
+
+			-- Verify parent is indeed not writable for our user
+			local parent_writable, parent_writable_err = file_permissions.is_writable(non_writable_parent_str)
+			assert.is_false(parent_writable, "Parent directory '" .. non_writable_parent_str .. "' should be non-writable for the test to be valid. Error: " .. tostring(parent_writable_err))
+
+			local file_path_str = pl_path.join(non_writable_parent_str, "file_in_non_writable.txt")
+			local op = CreateFileOperation.new(file_path_str, { content = "test" })
+
+			local success, err = op:execute()
+			assert.is_false(success)
+			assert.match("Parent directory '.+' is not writable", err, "Error message mismatch. Got: " .. tostring(err))
+			assert.is_false(pl_path.exists(file_path_str))
+
+			-- Cleanup: try to make parent writable again to allow tmp_dir cleanup
+			pcall(file_permissions.set_mode, non_writable_parent_str, "700")
+		end)
+
 		describe("options.create_parent_dirs = true", function()
 			it("should create nested directories and the file if parent directories do not exist", function()
 				local file_path_str = pl_path.join(tmp_dir, "parent", "child", "new_file.txt")
@@ -79,7 +157,7 @@ describe("CreateFileOperation", function()
 
 				local success, err = op:execute()
 				assert.is_false(success)
-				assert.match("No such file or directory", err)
+				assert.match("Parent directory '.+' does not exist and create_parent_dirs is false", err)
 				assert.is_false(pl_path.exists(file_path_str))
 				assert.is_nil(op.checksum_data.target_checksum)
 			end)

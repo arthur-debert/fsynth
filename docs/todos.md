@@ -9,3 +9,5 @@
 - [ ] Verify replace semantics
 - [ ] Verify deletion of links, never targets
 - [ ] Rough sandboxing
+- [ ] Add to path
+- [ ] Concat files?
