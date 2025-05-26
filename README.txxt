@@ -4,45 +4,54 @@ FSYNTH: SYNTHETIC FILESYSTEM FOR ISOLATED OPERATIONS
 1. Purpose and Rationale
 -------------------------
 
-Fsynth provides a synthetic filesystem abstraction to isolate and queue 
-filesystem operations for batch execution. The primary goal is to separate 
-planning from execution, allowing most of the codebase to remain functional 
-and side-effect free. This approach:
+Fsynth provides a synthetic filesystem abstraction to isolate and queue
+filesystem operations for batch execution. The primary goal is to separate
+planning from execution, allowing most of the codebase to remain functional
+and side-effect free.
 
-- Makes code easier to test by isolating side effects
-- Enables dry-run capabilities without code duplication
-- Improves reliability by enabling pre-execution validation
-- Allows for proper error handling and optional partial rollback
+For example, scripts that do a series of simple fs work (create a dir, add a
+file, link another) can generate the file system in a queue for later execution.
+This approach:
 
-Fsynth isn't intended for data-critical or concurrent environments. It's 
-designed for simple, reliable file operation batching with appropriate 
-safeguards.
+    - Makes code easier to test by isolating side effects
+    - Enables dry-run capabilities without code duplication
+    - Improves reliability by enabling pre-execution validation
+    - Allows for proper error handling and optional partial rollback
+
+Fsynth isn't intended for data-critical or concurrent environments. It's
+designed for simple, reliable file operation batching with appropriate
+safeguards. This can't be stressed enough: using it in high concurrency enviroments will result in data loss.
 
 
 2. Core Design Principles
 --------------------------
 
-a. PURE PLANNING, ISOLATED EXECUTION
+a. Pure Planning, Isolated Execution
    Build an operation queue without making any actual filesystem changes,
    then execute the queue in a controlled, isolated part of the codebase.
-b. CONTENT VERIFICATION
+
+b. Content Verification
+
    Each file operation should checksum source and target files where
    appropriate. This enables:
    - Verification that the source file hasn't changed since planning
    - Detection of target file changes before overwriting
    - Optional backing down if content has changed
 
-c. SAFE DIRECTORY HANDLING
+c. Safe Directory Handling
+
    When processing directories:
    - Use an accumulator to track processed items
    - Implement a configurable maximum to prevent processing huge directories
    - Provide a clear mechanism to skip/include dotfiles
 
-d. ROLLBACK CAPABILITY
+d. Rollback Capability
+
    While not promising full transaction semantics, fsynth should attempt
    reasonable rollback of failed operation batches.
 
-e. IMMUTABILITY AND FUNCTIONAL APPROACH
+e. Immutability And Functional Approach
+
    Once an operation is created, its parameters should be immutable.
    This helps with debugging and ensures operations don't unexpectedly
    change behavior between creation and execution.
@@ -140,73 +149,6 @@ The library will be tested with Busted, using mocks to isolate filesystem
 operations for unit testing.
 
 
+Techincal &  Development
 
-6. Testing 
-----------
-
-a. UNIT TESTING
-   - Test each operation type in isolation
-   - Test validation, execution, and rollback separately
-   - Test queue management independently
-
-b. INTEGRATION TESTING
-   - Test full execution flows with controlled test directories
-   - Verify proper handling of edge cases (permissions, etc.)
-   - Test with various execution models
-
-c. Testing Commands
-
-    luarocks test 
-    busted 
-
-
-7. Dependencies and LuaRocks
------------------------------
-
-Fsynth uses LuaRocks for dependency management with project-isolated dependencies stored in a .luarocks directory tree. This approach keeps the project's dependencies separate from system-wide installations, preventing version conflicts and ensuring reproducible builds.
-
-a. REQUIRED DEPENDENCIES
-   - lua >= 5.1
-   - penlight >= 1.5.0 -> all base file ops
-   - log.lua >= 0.1.0 -> no print statements, always use
-   - string-format-all >= 0.2.0 -> all string formatting should use
-
-b. TEST DEPENDENCIES
-   - busted >= 2.0.0
-
-c. ENVIRONMENT SETUP
-
-   The project uses direnv to automatically set up the Lua environment.
-   As long as direnv is installed and properly configured in your shell,
-   the environment will be automatically set up when you enter the project
-   directory.
-   
-   # Running tests directly (environment is set up by direnv)
-   busted
-
-d. COMMON LUAROCKS COMMANDS
-
-   # Installing all dependencies from the rockspec file
-   luarocks --tree ./.luarocks install --only-deps fsynth-0.1.0-1.rockspec
-
-   # Installing the package in development mode
-   luarocks --tree ./.luarocks make
-
-   # Adding a new dependency
-   luarocks --tree ./.luarocks install new_package
-   # Then update the rockspec file to include the dependency:
-   #   dependencies = {
-   #      "lua >= 5.1",
-   #      ...
-   #      "new_package >= 1.0.0"
-   #   }
-
-   # Listing installed packages in the local tree
-   luarocks --tree ./.luarocks list
-
-   # Installing a specific version of a package
-   luarocks --tree ./.luarocks install log.lua 0.1.0-1
-
-   # Removing a package from the local tree
-   luarocks --tree ./.luarocks remove package_name
-   luarocks remove log.lua
+See the @docs/developmenet.txxt for information in package management, logging, testing and best-practices.

@@ -1,0 +1,96 @@
+Fsynth.lua Development Docs
+
+This document describes the techinical setup for this project.
+
+- Lua 5.1+
+-  busted for testing
+- luarocks for dependency management
+- direnv for environment management
+
+0. Enviroment Variables.
+    --  These are required for Development:
+        PROJECT_ROOT="$(pwd)"
+        LIB_NAME="fsynth"
+        LIB_ROOT="${PROJECT_ROOT}/${LIB_NAME}"
+        export FSYNTH_ROOT="${PROJECT_ROOT}"
+        LUAROCKS_PATH_RESULT=$("${LUAROCKS_BIN}" --tree "${PROJECT_ROOT}/.luarocks" path) && eval "${LUAROCKS_PATH_RESULT}"
+    -- env
+
+    The .envrc file takes care of this. As long as you have direnv installed, otherwise you must source the .envrc file manually.
+
+1. Depedency Management
+
+    a. Always use rockspeck to install dependencies.
+        All dependencies should be installed via the rockspeck. To avoid hard-to-replicate environment-specific bugs, when adding a new dependency:
+            - add it to the rockspeck file
+            - install the rockspeck
+
+        This avoids issues when one installs outside rockspeck and later adds it to the file. If the dependency name or version has a problem, it will work locally (for now) but not on fresh enviroments.
+
+    b. Use the local rocktree
+
+        In order to keep dependencies isolatd, they are installed in the local rocktree at .luarocks.
+
+            -- remember to use --tree ./luarocks
+                luarocks --tree ./.luarocks install --only-deps fsynth-0.1.0-1.rockspec
+            -- shell
+
+
+    d. Common Luarocks Commands
+
+        --
+            # Installing all dependencies from the rockspec file
+            luarocks --tree ./.luarocks install --only-deps fsynth-0.1.0-1.rockspec
+            # Installing the package in development mode
+            luarocks --tree ./.luarocks make
+            # Adding a new dependency
+            luarocks --tree ./.luarocks install new_package
+            # Listing installed packages in the local tree
+            luarocks --tree ./.luarocks list
+            # Installing a specific version of a package
+            luarocks --tree ./.luarocks install log.lua 0.1.0-1
+            # Removing a package from the local tree
+            luarocks --tree ./.luarocks remove package_name
+            luarocks remove log.lua
+    -- shell
+
+2. Testing
+
+    Testing is done through busted.
+    Since this project is about a file system operation queue, it is unavoidable that we do some actual testing on a real file system. Any file system operation should be done on TMPDIR .
+
+    The  test setup will setup this , make sure your test use it
+
+3. Logging
+
+    Logging is done through log.lua. This makes it possible to have generous log that can be activated at runtime. Using print either litters the excecution or requiress coding & build before debugging, not feasible.
+        - Uses the `log` library for all logging operations
+        - Log file is automatically truncated at startup
+        - Default log level is "info" for console output
+        - All levels (trace through fatal) are logged to file
+        - Log file is stored at "/var/tmp/lua-fsynth.log"
+        - Log entries include timestamp, source file, and line number
+        - Always use the log module instead of print statements
+    -- Important ! always use this!
+
+        local helper = require("spec.spec_helper")
+
+        describe("Processor", function()
+        -- Set up test environment
+        setup(function()
+            helper.clean_tmp_dir()
+        end)
+
+        teardown(function()
+            helper.clean_tmp_dir()
+        end)
+        ...
+        );
+-- lua
+
+4. Libraries and best practices
+
+    Besides testing and logging:
+
+        - Use string.format.all for formatting strings, much clear to read.
+        -
