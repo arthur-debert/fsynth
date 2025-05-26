@@ -1,68 +1,67 @@
-FSYNTH: SYNTHETIC FILESYSTEM FOR ISOLATED OPERATIONS
+Fsynth: Synthetic Filesystem for Isolated Operations
 ===================================================
 
 1. Purpose and Rationale
--------------------------
 
-Fsynth provides a synthetic filesystem abstraction to isolate and queue
-filesystem operations for batch execution. The primary goal is to separate
-planning from execution, allowing most of the codebase to remain functional
-and side-effect free.
+   Fsynth provides a synthetic filesystem abstraction that isolates and queues
+   filesystem operations for batch execution. The system separates planning from 
+   execution, allowing most of the codebase to remain functional and side-effect free.
 
-For example, scripts that do a series of simple fs work (create a dir, add a
-file, link another) can generate the file system in a queue for later execution.
-This approach:
+   For example, scripts that perform a series of simple filesystem operations (creating 
+   directories, adding files, creating links) can generate the filesystem operations in 
+   a queue for later execution. This approach:
 
-    - Makes code easier to test by isolating side effects
-    - Enables dry-run capabilities without code duplication
-    - Improves reliability by enabling pre-execution validation
-    - Allows for proper error handling and optional partial rollback
+      - Makes code easier to test by isolating side effects
+      - Enables dry-run capabilities without code duplication
+      - Improves reliability through pre-execution validation
+      - Allows for proper error handling and optional partial rollback
 
-Fsynth isn't intended for data-critical or concurrent environments. It's
-designed for simple, reliable file operation batching with appropriate
-safeguards. This can't be stressed enough: using it in high concurrency enviroments will result in data loss.
+   Fsynth is not intended for data-critical or concurrent environments. It is
+   designed for simple, reliable file operation batching with appropriate
+   safeguards. Note that using it in high concurrency environments will result in data loss.
 
 
 2. Core Design Principles
---------------------------
 
 a. Pure Planning, Isolated Execution
-   Build an operation queue without making any actual filesystem changes,
-   then execute the queue in a controlled, isolated part of the codebase.
+   
+   Fsynth builds an operation queue without making any actual filesystem changes,
+   then executes the queue in a controlled, isolated part of the codebase.
 
 b. Content Verification
 
-   Each file operation should checksum source and target files where
+   Each file operation checksums source and target files where
    appropriate. This enables:
-   - Verification that the source file hasn't changed since planning
-   - Detection of target file changes before overwriting
-   - Optional backing down if content has changed
+      
+      - Verification that the source file hasn't changed since planning
+      - Detection of target file changes before overwriting
+      - Optional backing down if content has changed
 
 c. Safe Directory Handling
 
-   When processing directories:
-   - Use an accumulator to track processed items
-   - Implement a configurable maximum to prevent processing huge directories
-   - Provide a clear mechanism to skip/include dotfiles
+   When processing directories, Fsynth:
+      - Uses an accumulator to track processed items
+      - Implements a configurable maximum to prevent processing huge directories
+      - Provides a clear mechanism to skip/include dotfiles
 
 d. Rollback Capability
 
-   While not promising full transaction semantics, fsynth should attempt
+   While not providing full transaction semantics, Fsynth attempts
    reasonable rollback of failed operation batches.
 
 e. Immutability And Functional Approach
 
-   Once an operation is created, its parameters should be immutable.
+   Once an operation is created, its parameters are immutable.
    This helps with debugging and ensures operations don't unexpectedly
    change behavior between creation and execution.
 
 
 3. API Design
--------------
 
 The API follows the Command pattern with a queue-based approach.
 
-a. OPERATION INTERFACE [1]
+a. Operation Interface [1]
+   
    Each operation encapsulates a specific filesystem action with a standard
    interface including:
    - execute(): performs the operation
@@ -70,85 +69,82 @@ a. OPERATION INTERFACE [1]
    - checksum(): generates or verifies checksums
    - undo(): reverses the operation (when possible)
 
-b. QUEUE MANAGEMENT [2]
+b. Queue Management [2]
+   
    The system uses an efficient queue implementation with O(1) enqueue/dequeue
    operations.
 
-c. BASIC OPERATIONS
-   Core operations include:
-   - CopyFile: Copy a file with checksum verification
-   - SymlinkFile: Create a symlink
-   - CreateDirectory: Create a directory (and parent dirs if needed)
-   - DeleteFile: Remove a file with optional backup
-   - DeleteDirectory: Remove a directory with safety limits
-   - MoveFile: Move a file with checksum verification
-   - ChmodFile: Change file permissions
+c. Basic Operations
 
-d. PROCESSOR INTERFACE [3]
+   Core operations include:
+   - CopyFile: Copies a file with checksum verification
+   - SymlinkFile: Creates a symlink
+   - CreateDirectory: Creates a directory (and parent dirs if needed)
+   - DeleteFile: Removes a file with optional backup
+   - DeleteDirectory: Removes a directory with safety limits
+   - MoveFile: Moves a file with checksum verification
+   - ChmodFile: Changes file permissions
+
+d. Processor Interface [3]
    The processor executes the operation queue with proper error handling
    and optional rollback.
 
 
 
 4. Implementation Details
---------------------
 
-a. OPERATION REPRESENTATION
+a. Operation Representation
+   
    Each operation is a Lua table with methods (using metatables) that include:
    - Common fields: source, target, options, checksum_data
    - Operation-specific fields as needed
    - Standard methods matching the operation interface
 
-b. CHECKSUMMING
-   - Use SHA-256 for robust checksumming
-   - Store checksums for both source and target files
-   - Options to compare checksums before operations
-   - Options to bail out if checksums don't match expectations
+b. Checksumming
+   
+   - Uses SHA-256 for robust checksumming
+   - Stores checksums for both source and target files
+   - Provides options to compare checksums before operations
+   - Includes options to bail out if checksums don't match expectations
 
-c. DIRECTORY HANDLING
-   - Implement iteration with item counting
-   - Configurable max_items parameter (default reasonably low, ~1000)
-   - Store current count in an accumulator object
-   - Clear warning/error when limit is reached
+c. Directory Handling
+   
+   - Implements iteration with item counting
+   - Offers configurable max_items parameter (default ~1000)
+   - Stores current count in an accumulator object
+   - Provides clear warning/error when limit is reached
 
-d. ERROR HANDLING
-   |    - Detailed error messages with context
-   |    - Error classification (fatal vs. non-fatal)
-   |    - Option to continue on non-fatal errors
-   |    - Logging of all operations and errors
-   |
-   | 5. LOGGING
-   |    - Uses the `log` library for all logging operations
-   |    - Log file is automatically truncated at startup
-   |    - Default log level is "info" for console output
-   |    - All levels (trace through fatal) are logged to file
-   |    - Log file is stored at "/var/tmp/lua-fsynth.log"
-   |    - Log entries include timestamp, source file, and line number
-   |    - Always use the log module instead of print statements
-   |
-   | 6. EXECUTION MODELS
-   - Standard: Execute operations in order, stopping on first error
-   - Validate-first: Validate all operations before executing any
-   - Best-effort: Try all operations, collecting errors
-   - Transactional: Attempt rollback of completed operations on failure
+d. Error Handling
+        
+        - Provides detailed error messages with context
+        - Implements error classification (fatal vs. non-fatal)
+        - Includes option to continue on non-fatal errors
+        - Logs all operations and errors
+    
+    
+5. Execution Models
+   
+   - Standard: Executes operations in order, stopping on first error
+   - Validate-first: Validates all operations before executing any
+   - Best-effort: Tries all operations, collecting errors
+   - Transactional: Attempts rollback of completed operations on failure
 
 
 
-5. Integration with Existing Systems
--------------------------------
+6. Integration with Existing Systems
 
-Fsynth is designed to work with Penlight for path handling and filesystem
-operations. Key integration points:
+   Fsynth works with Penlight for path handling and filesystem
+   operations. Key integration points:
 
-a. Leveraging Penlight's path functions for normalization, joining, etc.
-b. Using pl.dir for directory operations when appropriate
-c. Wrapping pl.file functions for file operations
-d. Using Penlight's utility functions where helpful
+      a. Leverages Penlight's path functions for normalization, joining, etc.
+      b. Uses pl.dir for directory operations when appropriate
+      c. Wraps pl.file functions for file operations
+      d. Utilizes Penlight's utility functions where helpful
 
-The library will be tested with Busted, using mocks to isolate filesystem
-operations for unit testing.
+   The library is tested with Busted, using mocks to isolate filesystem
+   operations for unit testing.
 
 
-Techincal &  Development
+7. Technical & Development
 
-See the @docs/developmenet.txxt for information in package management, logging, testing and best-practices.
+   See the docs/development.txxt for information on package management, logging, testing and best-practices.
