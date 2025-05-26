@@ -106,7 +106,7 @@ describe("file_permissions", function()
 
 		it("should handle read-only attribute on Windows", function()
 			if not is_windows then
-				pending("Windows-specific read-only test")
+				-- Skip test if not on Windows
 				return
 			end
 
@@ -169,7 +169,7 @@ describe("file_permissions", function()
 
 		it("should return basic permissions representation on Windows", function()
 			if not is_windows then
-				pending("Windows-specific permission representation test")
+				-- Skip test if not on Windows
 				return
 			end
 
@@ -235,7 +235,7 @@ describe("file_permissions", function()
 
 		it("should handle Windows read-only attribute for readability", function()
 			if not is_windows then
-				pending("Windows-specific read-only test for readability")
+				-- Skip test if not on Windows
 				return
 			end
 			local test_file = pl_path.join(tmp_dir, "win_readable_test.txt")

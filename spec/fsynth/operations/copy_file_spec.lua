@@ -146,7 +146,7 @@ describe("CopyFileOperation", function()
 
 		it("should preserve attributes by default (Unix-like check: specific mode)", function()
 			if is_windows then
-				pending("Skipping Unix-like attribute preservation test on Windows. Windows preservation is different.")
+				-- Skip test if on Windows, as this is a Unix-like test
 				return
 			end
 			local tmp_dir = helper.get_tmp_dir()
@@ -167,7 +167,7 @@ describe("CopyFileOperation", function()
 
 		it("should preserve read-only attribute on Windows when preserve_attributes is true (default)", function()
 			if not is_windows then
-				pending("Skipping Windows read-only preservation test on non-Windows.")
+				-- Skip test if not on Windows
 				return
 			end
 			local tmp_dir = helper.get_tmp_dir()
@@ -190,7 +190,7 @@ describe("CopyFileOperation", function()
 
 		it("should use default attributes if preserve_attributes is false (Unix-like check)", function()
 			if is_windows then
-				pending("Skipping Unix-like default attribute test on Windows.")
+				-- Skip test if on Windows, as this is a Unix-like test
 				return
 			end
 			local tmp_dir = helper.get_tmp_dir()
@@ -221,7 +221,7 @@ describe("CopyFileOperation", function()
 
 		it("should apply options.mode to target, overriding source/preserved attributes (Unix-like)", function()
 			if is_windows then
-				pending("Skipping Unix-like mode override test on Windows.")
+				-- Skip test if on Windows, as this is a Unix-like test
 				return
 			end
 			local tmp_dir = helper.get_tmp_dir()
@@ -242,7 +242,7 @@ describe("CopyFileOperation", function()
 
 		it("should apply options.mode to target on Windows (e.g., make writable from read-only source)", function()
 			if not is_windows then
-				pending("Skipping Windows mode override test on non-Windows.")
+				-- Skip test if not on Windows
 				return
 			end
 			local tmp_dir = helper.get_tmp_dir()
@@ -266,12 +266,7 @@ describe("CopyFileOperation", function()
 
 		it("should fail validation if source file is not readable (Unix-like)", function()
 			if is_windows then
-				-- On Windows, readability checks are different. A file might be "readable"
-				-- by owner even if all permissions are stripped via cacls for others.
-				-- The current is_readable on Windows uses io.open("rb").
-				pending(
-					"Skipping non-readable source test on Windows (permission model differs significantly for this check)."
-				)
+				-- Skip test if on Windows, as this is a Unix-like test
 				return
 			end
 			local tmp_dir = helper.get_tmp_dir()
@@ -287,9 +282,7 @@ describe("CopyFileOperation", function()
 
 		it("should fail execute if target directory is not writable (Unix-like)", function()
 			if is_windows then
-				pending(
-					"Skipping non-writable target dir test on Windows (permission model differs for directory writability setup)."
-				)
+				-- Skip test if on Windows, as this is a Unix-like test
 				return
 			end
 			local tmp_dir = helper.get_tmp_dir()
