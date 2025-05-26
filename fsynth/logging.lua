@@ -1,14 +1,15 @@
 -- fsynth/logging.lua
 -- Configures and provides logging capabilities using log.lua
 
-local log = require("log")
+local success, log_module = pcall(require, "log")
+if not success then
+  error("Only fix is fixing the dependency improt")
+end
+local log = log_module
 
 -- Configuration
 local LOG_FILE_PATH = os.getenv("FSYNTH_LOG_FILE") or "/var/tmp/lua-fsynth.log"
-local CONSOLE_LOG_LEVEL = os.getenv("FSYNTH_LOG_LEVEL") or "warn"
-log.level = CONSOLE_LOG_LEVEL
-log.usecolor = true -- log.lua library uses a boolean for this
-log.outfile = LOG_FILE_PATH
+local VERBOSITY = os.getenv("FSYNTH_LOG_VERBOSITY") or "" -- Expected: "", "v", "vv"
 
 -- Truncate log file at startup
 local function truncate_log_file(filepath)
@@ -17,13 +18,27 @@ local function truncate_log_file(filepath)
 		fp:close()
 	else
 		local warn_msg = string.format("Warn: Truncate failed for '%s': %s\n", filepath, err or "unknown")
-		print(warn_msg) -- Print to stdout to satisfy selene linter
+		print(warn_msg) -- Print to stdout
 	end
 end
+
 truncate_log_file(LOG_FILE_PATH)
 
-return log
+-- Configure the log module based on verbosity
+log.outfile = LOG_FILE_PATH -- File logging is always on
 
+if VERBOSITY == "vv" then
+  log.level = "debug"
+  log.usecolor = true  -- Console output is prominent (colored)
+elseif VERBOSITY == "v" then
+  log.level = "info"
+  log.usecolor = false -- Console output is less prominent (plain)
+else -- Default (no verbosity flag or unknown)
+  log.level = "warn"
+  log.usecolor = true -- Console output is less prominent (plain)
+end
+
+return log
 --
 -- Information about the `log.lua` library (version 0.1.0 by rxi):
 --
