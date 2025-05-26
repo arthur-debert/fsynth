@@ -1,7 +1,7 @@
 -- Simple checksum module for fsynth
 local pl_file = require("pl.file")
 -- always use the log module, no prints
-local log = require("fsynth.log")
+local log = require("fsynth.logging")
 local fmt = require("string.format.all")
 
 local Checksum = {}

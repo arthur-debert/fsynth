@@ -1,6 +1,6 @@
 -- File permission utilities for fsynth
 -- This module provides platform-independent file permission handling
-local log = require("fsynth.log")
+local log = require("fsynth.logging")
 local fmt = require("string.format.all")
 local lfs = require("lfs")
 local pl_path = require("pl.path") -- For is_writable on Windows directories

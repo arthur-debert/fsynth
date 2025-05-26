@@ -6,7 +6,7 @@ local pl_dir = require("pl.dir") -- Added for makepath
 local helper = require("spec.spec_helper")
 local file_permissions = require("fsynth.file_permissions") -- Added
 -- always use the log module, no prints
-local log = require("fsynth.log")
+local log = require("fsynth.logging")
 
 local is_windows = pl_path.sep == "\\\\" -- Added
 

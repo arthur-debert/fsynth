@@ -1,7 +1,7 @@
 -- High-level API for Fsynth
 -- Provides a clean, user-friendly interface over the core components
 
-local log = require("fsynth.log")
+local log = require("fsynth.logging")
 local Queue = require("fsynth.queue")
 local Processor = require("fsynth.processor")
 local fmt = require("string.format.all")

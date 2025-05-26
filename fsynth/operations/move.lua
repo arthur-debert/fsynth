@@ -5,7 +5,7 @@ local pl_file = require("pl.file") -- Not directly used for move, but good to ha
 local pl_dir = require("pl.dir")
 local lfs = require("lfs")
 -- always use the log module, no prints
-local log = require("fsynth.log")
+local log = require("fsynth.logging")
 local fmt = require("string.format.all")
 
 ---------------------------------------------------------------------

@@ -1,6 +1,6 @@
 -- Efficient queue implementation
 -- always use the log module, no prints
-local log = require("fsynth.log")
+local log = require("fsynth.logging")
 local fmt = require("string.format.all")
 local Queue = {}
 

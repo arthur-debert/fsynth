@@ -1,6 +1,6 @@
 local Operation = require("fsynth.operation_base")
 -- always use the log module, no prints
-local log = require("fsynth.log")
+local log = require("fsynth.logging")
 local pl_path = require("pl.path")
 local pl_file = require("pl.file") -- Assuming pl.file.symlink exists
 local pl_dir = require("pl.dir")

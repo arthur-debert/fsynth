@@ -1,7 +1,7 @@
 -- Operation Queue Processor
 -- Responsible for executing operations in a queue with various execution strategies
 local Queue = require("fsynth.queue")
-local log = require("fsynth.log")
+local log = require("fsynth.logging")
 local fmt = require("string.format.all")
 
 local Processor = {}

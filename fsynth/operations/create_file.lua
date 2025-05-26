@@ -1,7 +1,7 @@
 local Operation = require("fsynth.operation_base")
 local Checksum = require("fsynth.checksum")
 -- always use the log module, no prints
-local log = require("fsynth.log")
+local log = require("fsynth.logging")
 local pl_path = require("pl.path")
 local pl_file = require("pl.file")
 local pl_dir = require("pl.dir")
