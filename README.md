@@ -27,7 +27,7 @@ At any level of cuncurrency, you wil have unpredictable and even data loss.
 
 While the code base pays good effort on ensuring it works safely, the
 interaction with other systems changing is not a tractable problem under this
-design.
+design. See [docs/correctness-decisions.md](docs/correctness-decisions.md).
 
 ### Real-World Example: Dotfiles Deployment
 
@@ -47,18 +47,19 @@ function deploy_dotfiles(dotfiles_repo, home_dir)
 
     -- Create config directories if they don't exist
     queue:add(fsynth.op.create_directory(home_dir .. "/.config"))
-    queue:add(fsynth.op.create_directory(home_dir .. "/.local/bin", {
-        recursive = true
-    }))
+    -- create_parent_dirs defaults to true for create_directory, so no options needed here
+    -- if that's the desired behavior for creating .local/bin.
+    queue:add(fsynth.op.create_directory(home_dir .. "/.local/bin"))
 
     -- Backup and link shell config files
     local shell_files = {".bashrc", ".zshrc", ".profile"}
     for _, file in ipairs(shell_files) do
-        -- Backup existing file if it exists
+        -- Attempt to backup existing file.
+        -- Note: fsynth.op.copy_file will fail validation if source_path does not exist.
+        -- For a robust script, you might check existence with e.g. Penlight's pl.path.exists()
+        -- before adding this operation to the queue if the source file is optional.
         queue:add(fsynth.op.copy_file(home_dir .. "/" .. file,
-                                     backup_dir .. "/" .. file, {
-            skip_if_source_missing = true
-        }))
+                                     backup_dir .. "/" .. file)) -- overwrite defaults to false
 
         -- Create symlink to dotfiles repo
         queue:add(fsynth.op.symlink(dotfiles_repo .. "/shell/" .. file,
@@ -81,9 +82,11 @@ function deploy_dotfiles(dotfiles_repo, home_dir)
     local scripts_dir = dotfiles_repo .. "/scripts"
     local target_bin = home_dir .. "/.local/bin"
 
+    -- Copy script and make it executable.
+    -- Note: Internal checksums are always active for copy_file.
     queue:add(fsynth.op.copy_file(scripts_dir .. "/update-system.sh",
                                  target_bin .. "/update-system", {
-        verify_checksum_after = true
+        mode = "755" -- Set executable permissions
     }))
 
     -- Create a record of deployment
@@ -122,9 +125,9 @@ Fsynth provides these filesystem operations:
 | `create_directory` | Create directories    | Auto-create parents, set permissions       |
 | `create_file`      | Create new files      | Set content, permissions                   |
 | `symlink`          | Create symbolic links | Relative/absolute, overwrite existing      |
-| `move_file`        | Move/rename files     | Checksum verification                      |
-| `delete_file`      | Delete files          | Optional backup before delete              |
-| `delete_directory` | Delete directories    | Recursive with safety limits               |
+| `move_file`        | Move/rename files     | Checksum verification (internal)           |
+| `delete_file`      | Delete files          | Tolerant to non-existent files             |
+| `delete_directory` | Delete directories    | Recursive option (limited for non-empty)   |
 
 ## Queue Primer
 
@@ -224,11 +227,10 @@ end
 
 ## Documentation
 
-- 📖 [In-Depth Guide](docs/guide/in-depth.md) - Execution models, error
-  handling, advanced features
 - 🚀 [Usage Examples](docs/usage_examples.lua) - More code examples
-- 📋 [API Reference](docs/design/api.md) - Complete API documentation
-- 🔧 [Development Guide](docs/development.txxt) - Contributing and development
+- 📋 [API Reference](docs/api.md) - Complete API documentation
+- 🔧 [Development Guide](docs/development/development.txt) - Contributing and
+  development
 
 ## Why Use Fsynth?
 

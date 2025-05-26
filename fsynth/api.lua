@@ -256,8 +256,11 @@ function M.op.copy_file(source_path, target_path, options)
 	-- Map our API options to the internal implementation
 	local internal_options = {
 		overwrite = options.overwrite,
-		preserve_timestamps = options.preserve_attributes,
-		verify_checksum = options.verify_checksum_before or options.verify_checksum_after,
+		preserve_attributes = options.preserve_attributes, -- Match op option name
+		-- verify_checksum is not directly used by op's core logic in a switchable way
+		-- initial source and final target checksums are always part of the op's lifecycle.
+		create_parent_dirs = options.create_parent_dirs,
+		mode = options.mode,
 	}
 
 	local op = copy_file.new(source_path, target_path, internal_options)
@@ -271,8 +274,9 @@ function M.op.create_directory(dir_path, options)
 	options = options or {}
 
 	local internal_options = {
-		create_parents = options.create_parents,
+		create_parent_dirs = options.create_parent_dirs, -- Match op option name
 		mode = options.mode,
+		exclusive = options.exclusive,
 	}
 
 	local op = create_dir.new(dir_path, internal_options)
@@ -289,8 +293,8 @@ function M.op.create_file(file_path, content, options)
 	local internal_options = {
 		content = content, -- Content is passed through options
 		mode = options.mode,
-		overwrite = options.overwrite,
-		create_parent_dirs = options.create_parents ~= false, -- Default to true like mkdir
+		-- CreateFileOperation is inherently exclusive, 'overwrite' is not applicable.
+		create_parent_dirs = options.create_parent_dirs, -- Let op handle default
 	}
 
 	local op = create_file.new(file_path, internal_options)
@@ -305,7 +309,8 @@ function M.op.symlink(existing_path, link_path, options)
 
 	local internal_options = {
 		overwrite = options.overwrite,
-		relative = options.relative,
+		-- 'relative' is determined by the user-provided 'existing_path', not an option.
+		create_parent_dirs = options.create_parent_dirs,
 	}
 
 	local op = symlink.new(existing_path, link_path, internal_options)
@@ -320,7 +325,9 @@ function M.op.move_file(source_path, target_path, options)
 
 	local internal_options = {
 		overwrite = options.overwrite,
-		verify_checksum = options.verify_checksum,
+		-- verify_checksum is not directly used by op's core logic in a switchable way for files
+		-- initial source and final target checksums are always part of the op's lifecycle if applicable.
+		create_parent_dirs = options.create_parent_dirs,
 	}
 
 	local op = move.new(source_path, target_path, internal_options)
@@ -334,8 +341,8 @@ function M.op.delete_file(file_path, options)
 	options = options or {}
 
 	local internal_options = {
-		-- The delete operation doesn't support backup options in the current implementation
-		-- These would need to be implemented separately
+		-- DeleteOperation is tolerant to non-existent paths by default.
+		-- Backup options are not implemented.
 	}
 
 	local op = delete.new(file_path, internal_options)
@@ -351,7 +358,8 @@ function M.op.delete_directory(dir_path, options)
 
 	local internal_options = {
 		is_recursive = options.recursive,
-		-- max_items is not currently implemented in the delete operation
+		-- max_items is not implemented.
+		-- DeleteOperation is tolerant to non-existent paths by default.
 	}
 
 	local op = delete.new(dir_path, internal_options)
