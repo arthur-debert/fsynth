@@ -42,7 +42,7 @@ jobs:
       - name: Install Lua dependencies
         if: steps.cache-lua-deps.outputs.cache-hit != 'true'
         run: |
-          luarocks --tree ./.luarocks install --only-deps fsynth-0.1.0-1.rockspec
+          luarocks install --local --only-deps fsynth-0.1.0-1.rockspec
 
       - name: Run tests
         run: |
