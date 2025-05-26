@@ -160,7 +160,7 @@ function CopyFileOperation:execute()
 		end
 	elseif not self.options.create_parent_dirs then
 		err_msg =
-			fmt("Target parent directory '{}' does not exist and create_parent_dirs is false.", target_parent_dir_path)
+			fmt("Target parent dir \'{}\' not found " .. "and create_parent_dirs is false.", target_parent_dir_path)
 		log.error(err_msg)
 		return false, err_msg
 	end
@@ -174,7 +174,8 @@ function CopyFileOperation:execute()
 				pl_dir.makepath(parent_dir)
 			end)
 			if not ok then
-				return false, fmt("Failed to create parent directories for '{}': {}", actual_target_path, tostring(err_msg))
+				return false,
+					fmt("Failed to create parent directories for '{}': {}", actual_target_path, tostring(err_msg))
 			end
 		end
 	end
@@ -190,7 +191,8 @@ function CopyFileOperation:execute()
 			"Using file_permissions.copy_with_attributes with preserve_attributes=%s",
 			self.options.preserve_attributes
 		)
-		local result = file_permissions.copy_with_attributes(self.source, actual_target_path, self.options.preserve_attributes)
+		local result =
+			file_permissions.copy_with_attributes(self.source, actual_target_path, self.options.preserve_attributes)
 		log.debug("copy_with_attributes result: %s", result)
 		return result
 	end)
@@ -198,11 +200,13 @@ function CopyFileOperation:execute()
 
 	if not ok then
 		log.error("pcall failed: %s", err_msg)
-		return false, fmt("Failed to copy file from '{}' to '{}': {}", self.source, actual_target_path, tostring(err_msg))
+		return false,
+			fmt("Failed to copy file from '{}' to '{}': {}", self.source, actual_target_path, tostring(err_msg))
 	end
 	if type(err_msg) ~= "boolean" or err_msg == false then
 		log.error("pl_file.copy returned non-success: %s, %s", type(err_msg), err_msg)
-		return false, fmt("Failed to copy file from '{}' to '{}': {}", self.source, actual_target_path, tostring(err_msg))
+		return false,
+			fmt("Failed to copy file from '{}' to '{}': {}", self.source, actual_target_path, tostring(err_msg))
 	end
 
 	-- Record Target Checksum
@@ -224,7 +228,11 @@ function CopyFileOperation:execute()
 			os.remove(actual_target_path)
 		end)
 		return false,
-			fmt("Failed to calculate checksum for copied file '{}': {}", actual_target_path, tostring(checksum_target_err))
+			fmt(
+				"Failed to calculate checksum for copied file '{}': {}",
+				actual_target_path,
+				tostring(checksum_target_err)
+			)
 	end
 	self.checksum_data.target_checksum = new_target_checksum
 	self.actual_target_path_used_for_execute = actual_target_path
@@ -239,7 +247,7 @@ function CopyFileOperation:undo()
 
 	if not pl_path.exists(path_to_undo) then
 		return true,
-				fmt("Target file '{}' does not exist, undo operation is a no-op or file already removed.", path_to_undo)
+			fmt("Target file '{}' does not exist, undo operation is a no-op or file already removed.", path_to_undo)
 	end
 
 	if not self.checksum_data.target_checksum then
@@ -249,16 +257,16 @@ function CopyFileOperation:undo()
 	local current_target_checksum, checksum_err = Checksum.calculate_sha256(path_to_undo)
 	if not current_target_checksum then
 		return false,
-				fmt(
-					"Failed to calculate checksum for target file '{}' during undo: {}",
-					path_to_undo,
-					tostring(checksum_err)
-				)
+			fmt(
+				"Failed to calculate checksum for target file '{}' during undo: {}",
+				path_to_undo,
+				tostring(checksum_err)
+			)
 	end
 
 	if current_target_checksum ~= self.checksum_data.target_checksum then
 		return false,
-				"Copied file content of '" .. fmt(
+			"Copied file content of '" .. fmt(
 				"'{}' has changed since operation (checksum mismatch), cannot safely undo.",
 				path_to_undo
 			) .. "'"

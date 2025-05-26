@@ -4,7 +4,7 @@ local file_permissions = require("fsynth.file_permissions") -- Added
 local pl_path = require("pl.path")
 local pl_file = require("pl.file") -- Updated import - using file instead of fs
 
-local is_windows = pl_path.sep == '\\\\' -- Added
+local is_windows = pl_path.sep == "\\\\" -- Added
 
 describe("CreateFileOperation", function()
 	local tmp_dir
@@ -103,7 +103,9 @@ describe("CreateFileOperation", function()
 
 		it("should fail to create a file if parent directory is not writable (Unix-like)", function()
 			if is_windows then
-				pending("Skipping parent non-writable test on Windows due to complexity of setting up reliable non-writable parent for current user.")
+				pending(
+					"Skipping parent non-writable test on Windows due to complexity of setting up reliable non-writable parent for current user."
+				)
 				return
 			end
 			local non_writable_parent_str = pl_path.join(tmp_dir, "non_writable_parent")
@@ -114,7 +116,13 @@ describe("CreateFileOperation", function()
 
 			-- Verify parent is indeed not writable for our user
 			local parent_writable, parent_writable_err = file_permissions.is_writable(non_writable_parent_str)
-			assert.is_false(parent_writable, "Parent directory '" .. non_writable_parent_str .. "' should be non-writable for the test to be valid. Error: " .. tostring(parent_writable_err))
+			assert.is_false(
+				parent_writable,
+				"Parent directory '"
+					.. non_writable_parent_str
+					.. "' should be non-writable for the test to be valid. Error: "
+					.. tostring(parent_writable_err)
+			)
 
 			local file_path_str = pl_path.join(non_writable_parent_str, "file_in_non_writable.txt")
 			local op = CreateFileOperation.new(file_path_str, { content = "test" })

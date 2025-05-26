@@ -236,11 +236,17 @@ function file_permissions.copy_with_attributes(src, dst, preserve_attributes)
 			log.debug("Performing non-preserving copy (read/write) for Unix: %s -> %s", src, dst)
 			local content, read_err = pl_file.read(src)
 			if not content then -- pl_file.read returns (contents) or (nil, errmsg)
-				return false, fmt("Failed to read source file '{}' for non-preserving copy: {}", src, read_err or "unknown error")
+				return false,
+					fmt("Failed to read source file '{}' for non-preserving copy: {}", src, read_err or "unknown error")
 			end
 			local write_ok, write_err = pl_file.write(dst, content)
 			if not write_ok then
-				return false, fmt("Failed to write target file '{}' for non-preserving copy: {}", dst, write_err or "unknown error")
+				return false,
+					fmt(
+						"Failed to write target file '{}' for non-preserving copy: {}",
+						dst,
+						write_err or "unknown error"
+					)
 			end
 			return true
 		end

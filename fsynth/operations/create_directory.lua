@@ -126,7 +126,7 @@ function CreateDirectoryOperation:execute()
 			-- makepath succeeded
 			self.dir_actually_created_by_this_op = not path_existed_as_dir_before_op
 			log.info("Directory successfully created: %s", self.target)
-			
+
 			-- Apply specified permissions if provided
 			if self.options.mode then
 				log.debug("Setting permissions on created directory to: %s", self.options.mode)
@@ -137,7 +137,7 @@ function CreateDirectoryOperation:execute()
 					-- Just log a warning
 				end
 			end
-			
+
 			return true
 		elseif not pcall_success then
 			err_msg =
@@ -157,7 +157,7 @@ function CreateDirectoryOperation:execute()
 			-- mkdir succeeded (returns true on success)
 			self.dir_actually_created_by_this_op = true
 			log.info("Directory successfully created: %s", self.target)
-			
+
 			-- Apply specified permissions if provided
 			if self.options.mode then
 				log.debug("Setting permissions on created directory to: %s", self.options.mode)
@@ -168,7 +168,7 @@ function CreateDirectoryOperation:execute()
 					-- Just log a warning
 				end
 			end
-			
+
 			return true
 		elseif not pcall_success then
 			err_msg =

@@ -4,7 +4,7 @@ local pl_path = require("pl.path")
 local file_permissions = require("fsynth.file_permissions") -- Added
 -- local fs = require("pl.fs")
 
-local is_windows = pl_path.sep == '\\\\' -- Added
+local is_windows = pl_path.sep == "\\\\" -- Added
 
 describe("CreateDirectoryOperation", function()
 	local tmp_dir
@@ -105,7 +105,13 @@ describe("CreateDirectoryOperation", function()
 			assert.is_true(mode_set_ok, "Failed to set parent dir to non-writable: " .. tostring(mode_set_err))
 
 			local parent_writable, parent_writable_err = file_permissions.is_writable(non_writable_parent_str)
-			assert.is_false(parent_writable, "Parent directory '" .. non_writable_parent_str .. "' should be non-writable for the test to be valid. Error: " .. tostring(parent_writable_err))
+			assert.is_false(
+				parent_writable,
+				"Parent directory '"
+					.. non_writable_parent_str
+					.. "' should be non-writable for the test to be valid. Error: "
+					.. tostring(parent_writable_err)
+			)
 
 			local dir_path_str = pl_path.join(non_writable_parent_str, "dir_in_non_writable")
 			-- create_parent_dirs is true by default, but makepath should fail if parent is not writable.
