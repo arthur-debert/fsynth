@@ -167,8 +167,8 @@ function Processor:format_errors()
     local op_type = err.operation and type(err.operation) or "unknown"
     local source = err.operation and err.operation.source or "n/a"
     local target = err.operation and err.operation.target or "n/a"
-    table.insert(result, fmt(
-      "Error {} [{} phase]: {} (operation: {}, source: {}, target: {})",
+    table.insert(result, string.format(
+      "Error %d [%s phase]: %s (operation: %s, source: %s, target: %s)",
       i,
       err.phase or "unknown",
       err.error or "unknown error",
