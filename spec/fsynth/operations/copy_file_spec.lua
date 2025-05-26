@@ -2,6 +2,8 @@
 local CopyFileOperation = require("fsynth.operations.copy_file")
 local pl_file = require("pl.file")
 local helper = require("spec.spec_helper")
+-- always use the log module, no prints
+local log = require("fsynth.log")
 
 describe("CopyFileOperation", function()
     -- Set up test environment
@@ -90,18 +92,18 @@ describe("CopyFileOperation", function()
         local target = tmp_dir .. "/target.txt"
         local content = "Test content for copying"
 
-        print("TEST: Creating source file at", source)
+        log.info("TEST: Creating source file at %s", source)
         -- Create source file
         local file = io.open(source, "w")
         file:write(content)
         file:close()
 
-        print("TEST: Creating CopyFileOperation with overwrite=true")
+        log.info("TEST: Creating CopyFileOperation with overwrite=true")
         local op = CopyFileOperation.new(source, target, {overwrite = true})
 
-        print("TEST: Validating operation")
+        log.info("TEST: Validating operation")
         local valid, err = op:validate()
-        print("TEST: Validation result:", valid, err)
+        log.info("TEST: Validation result: %s %s", valid, err)
         assert.is_true(valid, "Validation failed: " .. tostring(err))
 
         local success = op:execute()
