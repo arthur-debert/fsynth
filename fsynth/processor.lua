@@ -67,14 +67,16 @@ function Processor:process(queue)
   -- Process all operations
   while not Queue.is_empty(queue) do
     local op = Queue.dequeue(queue)
+    local should_execute = true -- Flag to control execution
+
     -- Validate if not done already
     if not self.options.validate_first then
-      local valid, err = op:validate()
+      local valid, err_validate = op:validate()
       if not valid then
         table.insert(self.errors, {
           operation = op,
           phase = "validation",
-          error = err
+          error = err_validate
         })
         if not self.options.best_effort then
           -- Roll back if needed
@@ -83,18 +85,18 @@ function Processor:process(queue)
           end
           return false, self.errors
         end
-        -- Skip execution and continue with next operation
-        goto continue
+        should_execute = false -- Skip execution
       end
     end
+
     -- Check checksums if enabled
-    if self.options.verify_checksums then
-      local checksum_ok, err = op:checksum()
+    if should_execute and self.options.verify_checksums then
+      local checksum_ok, err_checksum = op:checksum()
       if not checksum_ok then
         table.insert(self.errors, {
           operation = op,
           phase = "checksum",
-          error = err
+          error = err_checksum
         })
         if not self.options.best_effort then
           -- Roll back if needed
@@ -103,29 +105,31 @@ function Processor:process(queue)
           end
           return false, self.errors
         end
-        -- Skip execution and continue with next operation
-        goto continue
+        should_execute = false -- Skip execution
       end
     end
+
     -- Execute operation
-    local success, err = op:execute()
-    if success then
-      table.insert(self.executed, op)
-    else
-      table.insert(self.errors, {
-        operation = op,
-        phase = "execution",
-        error = err
-      })
-      if not self.options.best_effort then
-        -- Roll back if needed
-        if self.options.transactional then
-          self:rollback()
+    if should_execute then
+      local success, err_execute = op:execute()
+      if success then
+        table.insert(self.executed, op)
+      else
+        table.insert(self.errors, {
+          operation = op,
+          phase = "execution",
+          error = err_execute
+        })
+        if not self.options.best_effort then
+          -- Roll back if needed
+          if self.options.transactional then
+            self:rollback()
+          end
+          return false, self.errors
         end
-        return false, self.errors
       end
     end
-    ::continue::
+    -- Label ::continue:: is no longer needed here
   end
   -- Return success if no errors or best_effort mode
   if #self.errors == 0 then
