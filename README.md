@@ -1,11 +1,6 @@
 # Fsynth 🗂️
 
-**A synthetic filesystem library for Lua that makes file operations safe,
-predictable, and testable.**
-
-[![Lua](https://img.shields.io/badge/Lua-5.1%2B-blue.svg)](https://www.lua.org/)
-[![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![Tests](https://img.shields.io/badge/Tests-Passing-brightgreen.svg)](spec/)
+predictable, and testable.\*\*
 
 ## Overview
 
@@ -13,41 +8,89 @@ Fsynth separates the _planning_ of filesystem operations from their _execution_.
 Instead of immediately performing operations, you queue them up and execute them
 as a batch.
 
-### Real-World Example: Database Backup Script
+Designed to isolate side-effects in your applications, enabling better
+testability, easier resoning about your programs, a inspectable list of would-be
+file system operations and dryr-run modes for free.
 
-Here's a common scenario - backing up a database with related files:
+[![Lua](https://img.shields.io/badge/Lua-5.1%2B-blue.svg)](https://www.lua.org/)
+[![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+[![Tests](https://img.shields.io/badge/Tests-Passing-brightgreen.svg)](spec/)
+
+## Disclaimer
+
+A future-bound-journaling file-system is enterily impossible to build, as cool
+as it may sound. Fsynth has a very narrow domain: non concurrent, non-mission
+critical data. This is useful for scripts or programs running under controled
+envinroments.
+
+At any level of cuncurrency, you wil have unpredictable and even data loss.
+
+While the code base pays good effort on ensuring it works safely, the
+interaction with other systems changing is not a tractable problem under this
+design.
+
+### Real-World Example: Dotfiles Deployment
+
+Here's a common scenario - deploying dotfiles across systems with backup
+protection:
 
 ```lua
 local fsynth = require("fsynth")
 
-function backup_database(db_name)
-    local timestamp = os.date("%Y%m%d_%H%M%S")
-    local backup_dir = "backups/" .. db_name .. "_" .. timestamp
-
+function deploy_dotfiles(dotfiles_repo, home_dir)
     local queue = fsynth.new_queue()
+    local timestamp = os.date("%Y%m%d_%H%M%S")
+    local backup_dir = home_dir .. "/.dotfiles_backup_" .. timestamp
 
-    -- Create backup structure
+    -- Create backup directory
     queue:add(fsynth.op.create_directory(backup_dir))
-    queue:add(fsynth.op.create_directory(backup_dir .. "/data"))
-    queue:add(fsynth.op.create_directory(backup_dir .. "/logs"))
 
-    -- Copy database files with verification
-    queue:add(fsynth.op.copy_file(db_name .. ".db", backup_dir .. "/data/" .. db_name .. ".db", {
-        verify_checksum_after = true  -- Ensure backup integrity
+    -- Create config directories if they don't exist
+    queue:add(fsynth.op.create_directory(home_dir .. "/.config"))
+    queue:add(fsynth.op.create_directory(home_dir .. "/.local/bin", {
+        recursive = true
     }))
 
-    -- Copy related files
-    queue:add(fsynth.op.copy_file(db_name .. ".conf", backup_dir .. "/data/" .. db_name .. ".conf"))
-    queue:add(fsynth.op.move_file("logs/current.log", backup_dir .. "/logs/backup.log"))
+    -- Backup and link shell config files
+    local shell_files = {".bashrc", ".zshrc", ".profile"}
+    for _, file in ipairs(shell_files) do
+        -- Backup existing file if it exists
+        queue:add(fsynth.op.copy_file(home_dir .. "/" .. file,
+                                     backup_dir .. "/" .. file, {
+            skip_if_source_missing = true
+        }))
 
-    -- Create metadata
-    queue:add(fsynth.op.create_file(backup_dir .. "/backup_info.txt",
-        "Backup created: " .. timestamp .. "\nDatabase: " .. db_name))
+        -- Create symlink to dotfiles repo
+        queue:add(fsynth.op.symlink(dotfiles_repo .. "/shell/" .. file,
+                                   home_dir .. "/" .. file, {
+            overwrite = true
+        }))
+    end
 
-    -- Create a "latest" symlink
-    queue:add(fsynth.op.symlink(backup_dir, "backups/latest", {
+    -- Link editor configs
+    queue:add(fsynth.op.symlink(dotfiles_repo .. "/vim/.vimrc",
+                               home_dir .. "/.vimrc", {
         overwrite = true
     }))
+    queue:add(fsynth.op.symlink(dotfiles_repo .. "/vim",
+                               home_dir .. "/.vim", {
+        overwrite = true
+    }))
+
+    -- Copy and make scripts executable (don't use symlinks for scripts)
+    local scripts_dir = dotfiles_repo .. "/scripts"
+    local target_bin = home_dir .. "/.local/bin"
+
+    queue:add(fsynth.op.copy_file(scripts_dir .. "/update-system.sh",
+                                 target_bin .. "/update-system", {
+        verify_checksum_after = true
+    }))
+
+    -- Create a record of deployment
+    queue:add(fsynth.op.create_file(home_dir .. "/.dotfiles_info",
+        "Dotfiles deployed: " .. timestamp ..
+        "\nSource: " .. dotfiles_repo ..
+        "\nBackup: " .. backup_dir))
 
     -- Execute with rollback on failure
     local processor = fsynth.new_processor()
@@ -56,17 +99,6 @@ function backup_database(db_name)
     return results:is_success()
 end
 ```
-
-**Benefits of this approach:**
-
-- ✅ If any step fails (disk full, permissions, etc.), the entire backup is
-  rolled back
-- ✅ Can preview with `dry_run = true` before actual execution
-- ✅ Checksum verification ensures backup integrity
-- ✅ All operations are logged for audit trails
-- ✅ Easy to test without touching the filesystem
-
-## Installation
 
 ```bash
 luarocks install fsynth
@@ -190,47 +222,6 @@ function create_project(name)
 end
 ```
 
-### Safe File Updates
-
-```lua
-function update_config(config_path, new_content)
-    local q = fsynth.new_queue()
-
-    -- Backup existing
-    q:add(fsynth.op.copy_file(config_path, config_path .. ".backup"))
-
-    -- Write new config
-    q:add(fsynth.op.delete_file(config_path))
-    q:add(fsynth.op.create_file(config_path, new_content))
-
-    return q
-end
-```
-
-### Build Deployments
-
-```lua
-function deploy_build(version)
-    local q = fsynth.new_queue()
-
-    -- Create versioned directory
-    q:add(fsynth.op.create_directory("releases/v" .. version))
-
-    -- Copy artifacts
-    q:add(fsynth.op.copy_file("dist/app.lua",
-        "releases/v" .. version .. "/app.lua", {
-        verify_checksum_after = true
-    }))
-
-    -- Update symlink
-    q:add(fsynth.op.symlink("releases/v" .. version, "releases/current", {
-        overwrite = true
-    }))
-
-    return q
-end
-```
-
 ## Documentation
 
 - 📖 [In-Depth Guide](docs/guide/in-depth.md) - Execution models, error
@@ -244,17 +235,7 @@ end
 - 🧪 **Testable** - Test file operations without touching the disk
 - 🔍 **Previewable** - Dry-run mode shows what will happen
 - ↩️ **Reversible** - Rollback on failure prevents partial states
-- ✅ **Verifiable** - Checksums ensure data integrity
 - 📝 **Auditable** - Detailed logs of all operations
-
-## Limitations
-
-Fsynth is designed for controlled, sequential filesystem operations. It's not
-suitable for:
-
-- High-concurrency environments
-- Real-time file monitoring
-- Large-scale parallel processing
 
 ## License
 

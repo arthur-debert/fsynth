@@ -65,7 +65,7 @@ local function create_docs(version)
 end
 
 -- Function 3: Cleanup old builds
-local function cleanup_old_builds(keep_versions)
+local function cleanup_old_builds(_keep_versions)
     -- In real usage, you'd scan the directory and add delete operations
     deployment_queue:add(fsynth.op.delete_directory("build/v1.0.0", {
         recursive = true,
@@ -81,7 +81,7 @@ cleanup_old_builds(3)
 
 -- Execute all operations with validation
 print("Total operations queued:", deployment_queue:size())
-local deploy_results = processor:execute(deployment_queue, {
+processor:execute(deployment_queue, {
     model = "validate_first",
     on_error = "stop"
 })
@@ -184,7 +184,7 @@ if dry_results:is_success() then
     migration_queue:add(fsynth.op.move_file("old/footer.lua", "new_structure/components/footer.lua"))
     migration_queue:add(fsynth.op.delete_directory("old", { recursive = true }))
 
-    local real_results = processor:execute(migration_queue, {
+    processor:execute(migration_queue, {
         model = "validate_first",
         dry_run = false
     })
@@ -216,9 +216,8 @@ secure_queue:add(fsynth.op.delete_file("old_config.lua", {
     backup_before_delete = true,
     backup_suffix = ".backup"
 }))
-
 -- Execute with strict validation
-local secure_results = processor:execute(secure_queue, {
+processor:execute(secure_queue, {
     model = "validate_first",
     on_error = "stop"
 })
@@ -345,3 +344,102 @@ local deploy_res = deploy_proc:execute(deployment, {
 })
 
 print("Deployment dry run completed:", deploy_res:is_success())
+
+-- ===========================================================================
+-- Example 10: Dotfiles Deployment
+-- ===========================================================================
+print("\n=== Example 10: Dotfiles Deployment ===")
+
+-- Function to deploy dotfiles with backup protection
+local function deploy_dotfiles(dotfiles_repo, home_dir)
+    local dotfiles_queue = fsynth.new_queue()
+    local timestamp = os.date("%Y%m%d_%H%M%S")
+    local backup_dir = home_dir .. "/.dotfiles_backup_" .. timestamp
+
+    -- Create backup directory
+    dotfiles_queue:add(fsynth.op.create_directory(backup_dir))
+
+    -- Create config directories if they don't exist
+    dotfiles_queue:add(fsynth.op.create_directory(home_dir .. "/.config"))
+    dotfiles_queue:add(fsynth.op.create_directory(home_dir .. "/.local/bin", {
+        recursive = true
+    }))
+
+    -- Backup and link shell config files
+    local shell_files = {".bashrc", ".zshrc", ".profile"}
+    for _, file in ipairs(shell_files) do
+        -- Backup existing file if it exists
+        dotfiles_queue:add(fsynth.op.copy_file(home_dir .. "/" .. file,
+                                     backup_dir .. "/" .. file, {
+            skip_if_source_missing = true
+        }))
+
+        -- Create symlink to dotfiles repo
+        dotfiles_queue:add(fsynth.op.symlink(dotfiles_repo .. "/shell/" .. file,
+                                   home_dir .. "/" .. file, {
+            overwrite = true
+        }))
+    end
+
+    -- Link editor configs
+    dotfiles_queue:add(fsynth.op.symlink(dotfiles_repo .. "/vim/.vimrc",
+                               home_dir .. "/.vimrc", {
+        overwrite = true
+    }))
+    dotfiles_queue:add(fsynth.op.symlink(dotfiles_repo .. "/vim",
+                               home_dir .. "/.vim", {
+        overwrite = true
+    }))
+
+    -- Copy and make scripts executable (don't use symlinks for scripts)
+    local scripts_dir = dotfiles_repo .. "/scripts"
+    local target_bin = home_dir .. "/.local/bin"
+
+    dotfiles_queue:add(fsynth.op.copy_file(scripts_dir .. "/update-system.sh",
+                                 target_bin .. "/update-system", {
+        verify_checksum_after = true,
+        preserve_attributes = true
+    }))
+
+    -- Create a record of deployment
+    dotfiles_queue:add(fsynth.op.create_file(home_dir .. "/.dotfiles_info",
+        "Dotfiles deployed: " .. timestamp ..
+        "\nSource: " .. dotfiles_repo ..
+        "\nBackup: " .. backup_dir))
+
+    return dotfiles_queue
+end
+
+-- Example usage
+local dotfiles_repo = "~/dotfiles"
+local home_dir = os.getenv("HOME") or "~"
+
+local dotfiles_queue = deploy_dotfiles(dotfiles_repo, home_dir)
+print("Dotfiles operations queued:", dotfiles_queue:size())
+
+-- First run with dry_run to preview changes
+local dotfiles_proc = fsynth.new_processor()
+local dry_run_results = dotfiles_proc:execute(dotfiles_queue, {
+    model = "transactional",
+    dry_run = true
+})
+
+print("Dry run successful:", dry_run_results:is_success())
+print("Operations that would be performed:")
+for i, entry in ipairs(dry_run_results:get_log()) do
+    if i <= 5 then -- Only show first 5 for brevity
+        print("  " .. entry)
+    elseif i == 6 then
+        print("  ... and " .. (#dry_run_results:get_log() - 5) .. " more operations")
+        break
+    end
+end
+
+-- In a real script, you would now execute for real if the dry run looks good:
+-- dotfiles_queue:clear() -- Reset the queue as it was consumed
+-- local dotfiles_queue = deploy_dotfiles(dotfiles_repo, home_dir)
+-- local real_results = dotfiles_proc:execute(dotfiles_queue, {
+--     model = "transactional",
+--     dry_run = false
+-- })
+-- print("Deployment successful:", real_results:is_success())
