@@ -94,7 +94,7 @@ function MoveOperation:execute()
 	end
 
 	local target_existed_before_move = pl_path.exists(self.target)
-	local pcall_success, pcall_err_or_val
+	local pcall_success
 
 	-- Create Parent Directories
 	if self.options.create_parent_dirs then

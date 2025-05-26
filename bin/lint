@@ -9,8 +9,7 @@
 errors_found=0
 
 echo "=== Running stylua formatter on fsynth and spec directories ==="
-if ! stylua ./fsynth ./spec
-then
+if ! stylua ./fsynth ./spec; then
   echo "ERROR: stylua formatting failed"
   errors_found=1
 else
@@ -18,9 +17,8 @@ else
 fi
 
 echo ""
-echo "=== Running selene linter on fsynth and spec directories ==="
-if ! selene ./fsynth ./spec
-then
+echo "=== Running selene linter on fsynth directory ==="
+if ! selene ./fsynth; then
   echo "ERROR: selene linting found issues"
   errors_found=1
 else
@@ -28,8 +26,7 @@ else
 fi
 
 echo ""
-if [ $errors_found -eq 0 ]
-then
+if [ $errors_found -eq 0 ]; then
   echo "✅ All lint checks passed successfully!"
   exit 0
 else

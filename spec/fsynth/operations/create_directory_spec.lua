@@ -177,7 +177,7 @@ describe("CreateDirectoryOperation", function()
 			assert.is_false(op.dir_actually_created_by_this_op) -- Key condition
 
 			local undo_success, undo_err = op:undo()
-			assert.is_true(undo_success, undo_err)          -- Undo should report success (no-op)
+			assert.is_true(undo_success, undo_err) -- Undo should report success (no-op)
 			assert.equal(dir_path_str, pl_path.exists(dir_path_str)) -- Directory should still exist
 		end)
 
