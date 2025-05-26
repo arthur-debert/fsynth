@@ -45,5 +45,7 @@ jobs:
           luarocks install --local --only-deps fsynth-0.1.0-1.rockspec
 
       - name: Run tests
+        env:
+          LUAROCKS_LOCAL: true
         run: |
           source .envrc && busted
