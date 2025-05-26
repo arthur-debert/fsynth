@@ -25,12 +25,13 @@ function DeleteOperation.new(path_to_delete, options)
 	self.original_content = nil
 	self.checksum_data.original_checksum = nil
 	self.item_actually_deleted = false
+	self.item_type = nil
 
 	return self
 end
 
 function DeleteOperation:validate()
-	if not self.source then
+	if not self.source or self.source == "" then
 		return false, "Path to delete not specified for DeleteOperation"
 	end
 
@@ -39,6 +40,7 @@ function DeleteOperation:validate()
 	end
 
 	self.original_path_was_directory = pl_path.isdir(self.source)
+	self.item_type = self.original_path_was_directory and "directory" or "file"
 
 	if self.original_path_was_directory then
 		local files, dirs -- To store results from pl_dir functions
@@ -50,7 +52,7 @@ function DeleteOperation:validate()
 		end
 
 		local pcall_ok_dirs, pcall_val_dirs = pcall(function()
-			dirs = pl_dir.getsubdirs(self.source)
+			dirs = pl_dir.getdirectories(self.source)
 		end)
 		if not pcall_ok_dirs then
 			return false, fmt("Error checking directory subdirs for '{}': {}", self.source, tostring(pcall_val_dirs))
@@ -63,7 +65,7 @@ function DeleteOperation:validate()
 				return false,
 					fmt(
 						"Directory '{}' is not empty and recursive delete with safety limits is not yet "
-							.. "implemented. Only empty directory deletion is supported currently.",
+						.. "implemented. Only empty directory deletion is supported currently.",
 						self.source
 					)
 			end
@@ -72,7 +74,7 @@ function DeleteOperation:validate()
 				return false,
 					fmt(
 						"Directory '{}' is not empty. Use is_recursive=true for empty directories "
-							.. "or wait for full recursive delete functionality.",
+						.. "or wait for full recursive delete functionality.",
 						self.source
 					)
 			end
@@ -94,7 +96,7 @@ function DeleteOperation:validate()
 			return false,
 				fmt(
 					"Failed to read file '{}' for deletion: Penlight pl_file.read returned nil "
-						.. "(possibly unreadable).",
+					.. "(possibly unreadable).",
 					self.source
 				)
 		end
@@ -123,15 +125,24 @@ function DeleteOperation:validate()
 end
 
 function DeleteOperation:execute()
+	-- Check if path exists first (before validation)
 	if not pl_path.exists(self.source) then
 		self.item_actually_deleted = false
 		return true, fmt("Path '{}' already deleted.", self.source)
 	end
 
+	-- Ensure validation has been run
+	if self.item_type == nil then
+		local valid, err = self:validate()
+		if not valid then
+			return false, err
+		end
+	end
+
 	local pcall_ok, penlight_success, penlight_errmsg
 
 	if self.original_path_was_directory then
-		pcall_ok, penlight_success, penlight_errmsg = pcall(pl_dir.rmdir, self.source)
+		pcall_ok, penlight_success, penlight_errmsg = pcall(pl_path.rmdir, self.source)
 		if not pcall_ok then
 			return false,
 				fmt("Failed to delete directory '{}' (pcall error): {}", self.source, tostring(penlight_success)) -- penlight_success is error from pcall
@@ -143,9 +154,10 @@ function DeleteOperation:execute()
 	else -- It's a file
 		local os_remove_pcall_ok, os_remove_ret1, os_remove_ret2 = pcall(os.remove, self.source)
 		if not os_remove_pcall_ok then
-			return false, fmt("Failed to delete file '{}' (pcall error): {}", self.source, tostring(os_remove_ret1)) -- ret1 is error from pcall
+			return false,
+				fmt("Failed to delete file '{}' (pcall error): {}", self.source, tostring(os_remove_ret1)) -- ret1 is error from pcall
 		end
-		if not os_remove_ret1 then -- os.remove failed (returned nil, errmsg)
+		if not os_remove_ret1 then                                                             -- os.remove failed (returned nil, errmsg)
 			return false, fmt("Failed to delete file '{}': {}", self.source, os_remove_ret2 or "unknown OS error")
 		end
 	end
@@ -166,7 +178,7 @@ function DeleteOperation:undo()
 	local pcall_ok, penlight_success, penlight_errmsg
 
 	if self.original_path_was_directory then
-		pcall_ok, penlight_success, penlight_errmsg = pcall(pl_dir.makedir, self.source)
+		pcall_ok, penlight_success, penlight_errmsg = pcall(pl_path.mkdir, self.source)
 		if not pcall_ok then
 			return false,
 				fmt(
@@ -231,7 +243,7 @@ function DeleteOperation:undo()
 			return false,
 				fmt(
 					"Undo: Checksum mismatch after restoring file '{}'. "
-						.. "Content may be corrupt. Expected: {}, Got: {}",
+					.. "Content may be corrupt. Expected: {}, Got: {}",
 					self.source,
 					self.checksum_data.original_checksum or "nil",
 					current_checksum or "nil"
