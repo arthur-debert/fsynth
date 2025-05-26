@@ -259,6 +259,76 @@ describe("MoveOperation", function()
 				assert.is_false(valid)
 				assert.match("Cannot move a file onto a directory", err)
 			end)
+
+			it("PENDING: should clarify behavior when moving a file into an existing directory target", function()
+				-- Explanation: The current test "should fail validation if moving a file onto an existing directory"
+				-- confirms that `MoveOperation` treats this as an error. This is a valid design choice.
+				-- However, a common `mv` behavior is to move the source file *into* the target directory.
+				-- This pending test is to explicitly decide if the current "fail" behavior is final,
+				-- or if an option or different logic should allow moving a file into a directory.
+				pending("Decide if moving a file *into* an existing directory should be supported or always fail.")
+				-- Example (if choosing to support move into dir, perhaps with an option or by default):
+				-- local source_file_str = pl_path.join(tmp_dir, "s_file_into_dir.txt")
+				-- create_file_for_test(source_file_str, "content")
+				-- local target_dir_str = pl_path.join(tmp_dir, "t_existing_dir_for_move")
+				-- create_dir_for_test(target_dir_str)
+				--
+				-- -- Assuming MoveOperation is changed to support this, or has an option:
+				-- local op = MoveOperation.new(source_file_str, target_dir_str) -- Or MoveOperation.new(source_file_str, target_dir_str, {move_into_dir_if_exists = true})
+				-- local success, err = op:execute()
+				-- assert.is_true(success, err)
+				-- local expected_target_path = pl_path.join(target_dir_str, "s_file_into_dir.txt")
+				-- assert.is_false(pl_path.exists(source_file_str))
+				-- assert.are.equal(expected_target_path, pl_path.exists(expected_target_path))
+				-- assert.are.equal("content", read_file_content(expected_target_path))
+			end)
+
+			it("PENDING: should handle moving a source path to the exact same target path", function()
+				-- Explanation: Test the behavior when the source and target paths are identical.
+				-- Expected: Should this be a successful no-op, or a validation error?
+				-- Most OS `mv` commands will report an error or do nothing if source and target are the same file.
+				pending("Define behavior for move operation when source and target paths are identical.")
+				-- Example (expecting a no-op success or specific validation error):
+				-- local path_str = pl_path.join(tmp_dir, "same_path.txt")
+				-- create_file_for_test(path_str, "content")
+				-- local op = MoveOperation.new(path_str, path_str)
+				--
+				-- local valid, err_validate = op:validate()
+				-- -- Option 1: Validation error
+				-- -- assert.is_false(valid)
+				-- -- assert.match("Source and target are the same", err_validate)
+				--
+				-- -- Option 2: Validation passes, execute is a no-op
+				-- assert.is_true(valid, err_validate)
+				-- local success, err_execute = op:execute()
+				-- assert.is_true(success, err_execute) -- Should be a successful no-op
+				-- assert.are.equal(path_str, pl_path.exists(path_str)) -- File still exists
+				-- assert.are.equal("content", read_file_content(path_str)) -- Content unchanged
+			end)
+
+			it("PENDING: should correctly handle moving a symbolic link (moving the link, not the target)", function()
+				-- Explanation: Define and test the behavior of MoveOperation when the source
+				-- is a symbolic link. It should move the link itself, not the file/directory
+				-- it points to. The target of the link (the string it contains) should remain unchanged.
+				pending("Test moving of a symbolic link.")
+				-- Example:
+				-- local lfs = require("lfs")
+				-- local link_target_path = pl_path.join(tmp_dir, "actual_target.txt")
+				-- create_file_for_test(link_target_path, "link target content")
+				--
+				-- local source_symlink_path = pl_path.join(tmp_dir, "source_symlink")
+				-- assert.is_true(lfs.link(link_target_path, source_symlink_path, true))
+				--
+				-- local target_symlink_path = pl_path.join(tmp_dir, "moved_symlink")
+				--
+				-- local op = MoveOperation.new(source_symlink_path, target_symlink_path)
+				-- local success, err = op:execute()
+				-- assert.is_true(success, err)
+				-- assert.is_false(pl_path.exists(source_symlink_path))
+				-- assert.is_true(pl_path.islink(target_symlink_path))
+				-- assert.are.equal(link_target_path, lfs.symlinkattributes(target_symlink_path, "target"))
+				-- assert.are.equal("link target content", pl_file.read(target_symlink_path)) -- Reading through the moved link
+			end)
 		end)
 
 		describe("Checksums (for file moves)", function()

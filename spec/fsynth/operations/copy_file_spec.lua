@@ -213,4 +213,53 @@ describe("CopyFileOperation", function()
 		assert.is_false(valid)
 		assert.truthy(err:match("Source file validation failed"))
 	end)
+
+	it("PENDING: should correctly handle source path being a directory", function()
+		-- Explanation: Current tests assume the source is always a file.
+		-- This test should define and verify the behavior when the source path
+		-- provided to CopyFileOperation is a directory.
+		-- Expected behavior: Should it fail validation? Or is this handled by a different operation type?
+		pending("Define and test behavior when source path is a directory.")
+		-- Example:
+		-- local tmp_dir = helper.get_tmp_dir()
+		-- local source_dir = tmp_dir .. "/source_dir"
+		-- helper.ensure_dir(source_dir) -- Or equivalent to create a directory
+		-- local target_file = tmp_dir .. "/target.txt"
+		-- local op = CopyFileOperation.new(source_dir, target_file)
+		-- local valid, err = op:validate()
+		-- assert.is_false(valid)
+		-- assert.truthy(err:match("Source is a directory")) -- Or similar error
+	end)
+
+	it("PENDING: should correctly handle target path being an existing directory", function()
+		-- Explanation: Current tests imply the target is always a full file path.
+		-- This test should define and verify the behavior when the target path
+		-- is an existing directory.
+		-- Expected behavior: Should it copy *into* the directory (e.g., target_dir/source_filename)?
+		-- Or should it fail validation?
+		pending("Define and test behavior when target path is an existing directory.")
+		-- Example (copy into directory):
+		-- local tmp_dir = helper.get_tmp_dir()
+		-- local source_file = tmp_dir .. "/source_to_dir.txt"
+		-- pl_file.write(source_file, "content")
+		-- local target_parent_dir = tmp_dir .. "/target_parent_dir"
+		-- helper.ensure_dir(target_parent_dir)
+		-- local op = CopyFileOperation.new(source_file, target_parent_dir)
+		-- local success, err = op:execute()
+		-- assert.is_true(success, err)
+		-- local expected_target_path = target_parent_dir .. "/source_to_dir.txt"
+		-- assert.truthy(pl_path.exists(expected_target_path))
+		-- assert.are.equal("content", pl_file.read(expected_target_path))
+	end)
+
+	it("PENDING: should handle I/O errors during file copy gracefully", function()
+		-- Explanation: Tests cover validation errors and successful copies,
+		-- but not runtime I/O errors during the actual op:execute() copy process
+		-- (e.g., disk full, no permission to write target chunks).
+		-- Expected behavior: execute() should return false, and potentially set an error message.
+		-- The undo behavior in such a partial failure case should also be considered.
+		pending("Test handling of I/O errors during the actual file copy process in execute().")
+		-- This might require mocking pl.file.copy or underlying I/O functions to simulate failure,
+		-- which can be complex depending on the testing framework and library structure.
+	end)
 end)

@@ -177,7 +177,7 @@ describe("CreateDirectoryOperation", function()
 			assert.is_false(op.dir_actually_created_by_this_op) -- Key condition
 
 			local undo_success, undo_err = op:undo()
-			assert.is_true(undo_success, undo_err) -- Undo should report success (no-op)
+			assert.is_true(undo_success, undo_err)          -- Undo should report success (no-op)
 			assert.equal(dir_path_str, pl_path.exists(dir_path_str)) -- Directory should still exist
 		end)
 
@@ -222,6 +222,28 @@ describe("CreateDirectoryOperation", function()
 				local undo_success, undo_err = op:undo()
 				-- Updated - this should actually fail because the directory is not there
 				assert.is_false(undo_success, undo_err)
+			end
+		)
+
+		it(
+			"PENDING: should clarify undo behavior if the directory to be removed by undo does not exist anymore",
+			function()
+				-- Explanation: The current test for an already-gone directory expects undo to fail.
+				-- This is a strict interpretation. Other operations (e.g., SymlinkOperation undo)
+				-- might treat this as a successful no-op.
+				-- This test is a placeholder to decide on a consistent philosophy:
+				-- - Strict failure: If the item the op created is gone, undo fails. (Current behavior for CreateDirectory)
+				-- - Tolerant success: If the item is gone, undo considers its job done.
+				pending(
+					"Decide on consistent undo philosophy for items already gone (strict failure vs. tolerant success)."
+				)
+				-- Example for tolerant success:
+				-- local dir_path_str = pl_path.join(tmp_dir, "undo_dir_already_gone_tolerant")
+				-- local op = CreateDirectoryOperation.new(dir_path_str)
+				-- local _, _ = op:execute()
+				-- assert.is_true(pl_path.rmdir(dir_path_str))
+				-- local undo_success, undo_err = op:undo()
+				-- assert.is_true(undo_success, undo_err)
 			end
 		)
 	end)

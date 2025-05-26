@@ -72,6 +72,30 @@ describe("DeleteOperation", function()
 				assert.is_nil(op.original_content)
 				assert.is_nil(op.checksum_data.original_checksum)
 			end)
+
+			it("PENDING: should delete an existing symbolic link (deleting the link, not the target)", function()
+				-- Explanation: Define and test the behavior of DeleteOperation when the path
+				-- is a symbolic link. It should delete the link itself, not the file/directory
+				-- it points to. The 'item_type' stored for undo should probably be 'symlink'
+				-- or similar, and 'original_content' would be the link's target path.
+				pending("Test deletion of a symbolic link.")
+				-- Example:
+				-- local lfs = require("lfs") -- May need lfs for symlink creation if not already available
+				-- local target_file_path = pl_path.join(tmp_dir, "symlink_target_file.txt")
+				-- create_file_for_test(target_file_path, "content")
+				-- local symlink_path = pl_path.join(tmp_dir, "my_symlink_to_delete")
+				-- assert.is_true(lfs.link(target_file_path, symlink_path, true)) -- Create symlink
+				--
+				-- local op = DeleteOperation.new(symlink_path)
+				-- local success, err = op:execute()
+				-- assert.is_true(success, err)
+				-- assert.is_false(pl_path.exists(symlink_path)) -- Link is gone
+				-- assert.is_false(pl_path.islink(symlink_path)) -- Double check it's not a broken link
+				-- assert.are.equal(target_file_path, pl_path.exists(target_file_path)) -- Target file still exists
+				-- assert.is_true(op.item_actually_deleted)
+				-- assert.are.equal("symlink", op.item_type) -- Or similar
+				-- assert.are.equal(target_file_path, op.original_content) -- Storing link target
+			end)
 		end)
 
 		describe("Attempting to Delete Non-Existent Item", function()
