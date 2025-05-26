@@ -2,6 +2,7 @@
 -- Responsible for executing operations in a queue with various execution strategies
 local Queue = require("fsynth.queue")
 local log = require("fsynth.log")
+local fmt = require("string.format.all")
 
 local Processor = {}
 Processor.__index = Processor
@@ -14,13 +15,13 @@ Processor.__index = Processor
 --   transactional: Attempt to rollback completed operations on failure
 --   force: Execute even if validation fails (when used with validate_first)
 function Processor.new(options)
-  log.debug("Creating new processor with options: %s", options and "some options" or "nil")
+  log.debug(fmt("Creating new processor with options: {}", options and "some options" or "nil"))
   local self = setmetatable({
     options = options or {},
     executed = {},  -- For rollback tracking
     errors = {}
   }, Processor)
-  log.debug("Processor created, type: %s, metatable: %s", type(self), getmetatable(self) == Processor)
+  log.debug(fmt("Processor created, type: {}, metatable: {}", type(self), getmetatable(self) == Processor))
   return self
 end
 
@@ -29,7 +30,7 @@ end
 --   success: true if all operations succeeded, false otherwise
 --   errors: table of errors encountered during processing
 function Processor:process(queue)
-  log.debug("Processor:process called, self type: %s", type(self))
+  log.debug(fmt("Processor:process called, self type: {}", type(self)))
   self.executed = {}
   self.errors = {}
   -- Optionally validate all operations first
@@ -160,14 +161,14 @@ end
 
 -- Format errors for display or logging
 function Processor:format_errors()
-  log.debug("format_errors called, self type: %s, errors count: %d", type(self), #self.errors)
+  log.debug(fmt("format_errors called, self type: {}, errors count: {}", type(self), #self.errors))
   local result = {}
   for i, err in ipairs(self.errors) do
     local op_type = err.operation and type(err.operation) or "unknown"
     local source = err.operation and err.operation.source or "n/a"
     local target = err.operation and err.operation.target or "n/a"
-    table.insert(result, string.format(
-      "Error %d [%s phase]: %s (operation: %s, source: %s, target: %s)",
+    table.insert(result, fmt(
+      "Error {} [{} phase]: {} (operation: {}, source: {}, target: {})",
       i,
       err.phase or "unknown",
       err.error or "unknown error",

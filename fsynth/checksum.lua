@@ -2,6 +2,7 @@
 local pl_file = require("pl.file")
 -- always use the log module, no prints
 local log = require("fsynth.log")
+local fmt = require("string.format.all")
 
 local Checksum = {}
 
@@ -20,7 +21,7 @@ end
 -- @return string The hexadecimal representation of the checksum, or nil.
 -- @return string An error message if the file cannot be read or processed, otherwise nil.
 function Checksum.calculate_sha256(filepath)
-  log.debug("Calculating checksum for file: %s", filepath)
+  log.debug(fmt("Calculating checksum for file: {}", filepath))
   if not filepath then
     local err_msg = "Filepath cannot be nil"
     log.error(err_msg)
@@ -30,9 +31,9 @@ function Checksum.calculate_sha256(filepath)
   local content, err = pl_file.read(filepath)
 
   if not content then
-    local err_msg = "Failed to read file for checksumming: " .. filepath
+    local err_msg = fmt("Failed to read file for checksumming: {}", filepath)
     if err then
-      err_msg = err_msg .. ": " .. tostring(err)
+      err_msg = fmt("{}: {}", err_msg, tostring(err))
     end
     log.error(err_msg)
     return nil, err_msg
@@ -40,7 +41,7 @@ function Checksum.calculate_sha256(filepath)
 
   -- Use our simple checksum function
   local hash_hex = simple_checksum(content)
-  log.debug("Checksum calculated for %s: %s", filepath, hash_hex)
+  log.debug(fmt("Checksum calculated for {}: {}", filepath, hash_hex))
   return hash_hex
 end
 

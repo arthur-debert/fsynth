@@ -1,9 +1,10 @@
 -- Main entry point for fsynth module
 -- always use the log module, no prints
 local log = require("fsynth.log")
+local fmt = require("string.format.all")
 
 -- Initialize the module
-log.info("Initializing fsynth module")
+log.info(fmt("Initializing fsynth module"))
 
 -- Return the module table
 return {
