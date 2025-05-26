@@ -440,8 +440,10 @@ describe("CopyFileOperation", function()
 		local valid, err = op:validate()
 		assert.is_false(valid)
 		-- The error message from fmt might include literal '{}' if not processed correctly by the logger/fmt
-		assert.truthy(err and err:match("^Source path %('{}'%) is a directory, not a file%. %S+$"),
-      "Error message mismatch. Got: " .. tostring(err))
+		assert.truthy(
+			err and err:match("^Source path %('{}'%) is a directory, not a file%. %S+$"),
+			"Error message mismatch. Got: " .. tostring(err)
+		)
 	end)
 
 	it("should correctly handle target path being an existing directory", function()
@@ -492,8 +494,10 @@ describe("CopyFileOperation", function()
 
 		local success, err_e = op:execute()
 		assert.is_false(success, "Execute should have failed due to existing file without overwrite.")
-		assert.truthy(err_e and err_e:match("Target file '[^']+' exists in directory and overwrite is false."),
-			"Error message mismatch. Got: " .. tostring(err_e))
+		assert.truthy(
+			err_e and err_e:match("Target file '[^']+' exists in directory and overwrite is false."),
+			"Error message mismatch. Got: " .. tostring(err_e)
+		)
 
 		-- Ensure existing target content is unchanged
 		assert.are.equal("existing target content", pl_file.read(existing_target_path))
@@ -521,7 +525,11 @@ describe("CopyFileOperation", function()
 		assert.is_true(success, "Execute failed: " .. tostring(err_e))
 
 		assert.truthy(pl_path.exists(target_file_in_dir_path), "Target file was not overwritten in the directory")
-		assert.are.equal(source_content, pl_file.read(target_file_in_dir_path), "Content of overwritten file is incorrect")
+		assert.are.equal(
+			source_content,
+			pl_file.read(target_file_in_dir_path),
+			"Content of overwritten file is incorrect"
+		)
 
 		-- Test undo for this case
 		local undo_success, undo_err = op:undo()

@@ -159,8 +159,7 @@ function CopyFileOperation:execute()
 			return false, err_msg
 		end
 	elseif not self.options.create_parent_dirs then
-		err_msg =
-			fmt("Target parent dir \'{}\' not found " .. "and create_parent_dirs is false.", target_parent_dir_path)
+		err_msg = fmt("Target parent dir '{}' not found " .. "and create_parent_dirs is false.", target_parent_dir_path)
 		log.error(err_msg)
 		return false, err_msg
 	end
