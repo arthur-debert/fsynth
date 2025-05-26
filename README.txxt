@@ -174,18 +174,20 @@ a. REQUIRED DEPENDENCIES
 b. TEST DEPENDENCIES
    - busted >= 2.0.0
 
-c. ENVIRONMENT SETUP SCRIPTS
+c. ENVIRONMENT SETUP
 
-   # Setup Lua environment (adds paths to dependencies)
-   source ./bin/luapath.sh
-
-   # Run tests with the correct environment
-   ./bin/run-tests
+   The project uses direnv to automatically set up the Lua environment.
+   As long as direnv is installed and properly configured in your shell,
+   the environment will be automatically set up when you enter the project
+   directory.
+   
+   # Running tests directly (environment is set up by direnv)
+   busted
 
 d. COMMON LUAROCKS COMMANDS
 
    # Installing all dependencies from the rockspec file
-   luarocks --tree ./.luarocks install --only-deps
+   luarocks --tree ./.luarocks install --only-deps fsynth-0.1.0-1.rockspec
 
    # Installing the package in development mode
    luarocks --tree ./.luarocks make
