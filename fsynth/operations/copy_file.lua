@@ -4,7 +4,7 @@ local log = require("fsynth.log")
 local pl_file = require("pl.file")
 local pl_path = require("pl.path")
 local pl_dir = require("pl.dir")
-local fmt = require("string-format-all")
+local fmt = require("string.format.all")
 -- os.remove is a standard Lua function, no need to require 'os' for it.
 
 ---------------------------------------------------------------------

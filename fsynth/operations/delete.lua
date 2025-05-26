@@ -5,7 +5,7 @@ local pl_file = require("pl.file")
 local pl_dir = require("pl.dir")
 -- always use the log module, no prints
 local log = require("fsynth.log")
-local fmt = require("string-format-all")
+local fmt = require("string.format.all")
 -- os.remove is standard
 
 ---------------------------------------------------------------------

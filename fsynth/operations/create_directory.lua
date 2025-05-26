@@ -3,7 +3,7 @@ local Operation = require("fsynth.operation_base")
 local log = require("fsynth.log")
 local pl_path = require("pl.path")
 local pl_dir = require("pl.dir")
-local fmt = require("string-format-all")
+local fmt = require("string.format.all")
 -- os.remove for undo, or pl_dir.rmdir
 
 ---------------------------------------------------------------------
