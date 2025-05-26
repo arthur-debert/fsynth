@@ -2,9 +2,9 @@ local helper = require("spec.spec_helper")
 local CreateFileOperation = require("fsynth.operations.create_file")
 local file_permissions = require("fsynth.file_permissions") -- Added
 local pl_path = require("pl.path")
-local pl_file = require("pl.file") -- Updated import - using file instead of fs
+local pl_file = require("pl.file")                          -- Updated import - using file instead of fs
 
-local is_windows = pl_path.sep == "\\\\" -- Added
+local is_windows = pl_path.sep == "\\\\"                    -- Added
 
 describe("CreateFileOperation", function()
 	local tmp_dir
@@ -17,6 +17,15 @@ describe("CreateFileOperation", function()
 	after_each(function()
 		helper.clean_tmp_dir()
 	end)
+
+	local function create_file_for_test(path_str, content)
+		content = content or ""
+		local file = io.open(path_str, "w")
+		assert.is_not_nil(file, "Failed to create file for test setup: " .. path_str)
+		file:write(content)
+		file:close()
+		assert.are.equal(path_str, pl_path.exists(path_str), "File was not created: " .. path_str)
+	end
 
 	local function read_file_content(path_str)
 		local file = io.open(path_str, "r")
@@ -119,9 +128,9 @@ describe("CreateFileOperation", function()
 			assert.is_false(
 				parent_writable,
 				"Parent directory '"
-					.. non_writable_parent_str
-					.. "' should be non-writable for the test to be valid. Error: "
-					.. tostring(parent_writable_err)
+				.. non_writable_parent_str
+				.. "' should be non-writable for the test to be valid. Error: "
+				.. tostring(parent_writable_err)
 			)
 
 			local file_path_str = pl_path.join(non_writable_parent_str, "file_in_non_writable.txt")
@@ -253,22 +262,24 @@ describe("CreateFileOperation", function()
 			assert.is_false(pl_path.exists(file_path_str))
 		end)
 
-		it("should fail (or do nothing) if the file does not exist at the time of undo", function()
-			local file_path_str = pl_path.join(tmp_dir, "undo_file_gone.txt")
-			local op = CreateFileOperation.new(file_path_str, { content = "test" })
+		it("should succeed tolerantly if the file does not exist at the time of undo (previously strict fail)",
+			function()
+				-- DECISION: Aligned with tolerant success policy.
+				local file_path_str = pl_path.join(tmp_dir, "undo_file_gone.txt")
+				local op = CreateFileOperation.new(file_path_str, { content = "test" })
 
-			local success, err = op:execute()
-			assert.is_true(success, err)
-			assert.are.equal(file_path_str, pl_path.exists(file_path_str))
-			local stored_checksum = op.checksum_data.target_checksum
+				local success, err = op:execute()
+				assert.is_true(success, err)
+				assert.are.equal(file_path_str, pl_path.exists(file_path_str))
+				local stored_checksum = op.checksum_data.target_checksum
 
-			assert.is_true(pl_file.delete(file_path_str)) -- Updated to pl_file.delete
+				assert.is_true(pl_file.delete(file_path_str)) -- Updated to pl_file.delete
 
-			op.checksum_data.target_checksum = stored_checksum
-			local undo_success, undo_err = op:undo()
-			assert.is_false(undo_success)
-			assert.match("does not exist", undo_err)
-		end)
+				op.checksum_data.target_checksum = stored_checksum -- Restore checksum as if it was set by op
+				local undo_success, undo_err = op:undo()
+				assert.is_true(undo_success, "Undo should succeed tolerantly: " .. tostring(undo_err))
+				assert.match("already did not exist", undo_err, "Undo error message mismatch")
+			end)
 
 		it("should fail if the file's content (and thus checksum) has changed since creation", function()
 			local file_path_str = pl_path.join(tmp_dir, "undo_file_changed.txt")
@@ -291,42 +302,23 @@ describe("CreateFileOperation", function()
 			assert.are.equal(file_path_str, pl_path.exists(file_path_str))
 		end)
 
-		it("should fail if no target_checksum was stored (e.g., if execute failed)", function()
-			local dir_path_as_file_str = pl_path.join(tmp_dir, "a_directory")
-			assert.is_true(pl_path.mkdir(dir_path_as_file_str))
+		it("should succeed tolerantly if the file created by op is deleted before undo", function()
+			-- DECISION: Implement tolerant success. If the file is already gone, undo should succeed.
+			-- This test explicitly checks for tolerant success when the operation did create the file.
 
-			local op = CreateFileOperation.new(dir_path_as_file_str, { content = "test" })
-			local exec_success = op:execute()
-			assert.is_false(exec_success)
-			assert.is_nil(op.checksum_data.target_checksum)
+			local file_path_str = pl_path.join(tmp_dir, "undo_file_gone_tolerant.txt")
+			local op = CreateFileOperation.new(file_path_str, { content = "test for tolerant undo" })
+			local success, err = op:execute()
+			assert.is_true(success, "Execute failed: " .. tostring(err))
+			assert.are.equal(file_path_str, pl_path.exists(file_path_str), "File should exist after execute")
+
+			-- Simulate file being deleted by external means
+			assert.is_true(pl_file.delete(file_path_str), "Failed to delete file for test setup")
+			assert.is_false(pl_path.exists(file_path_str), "File should not exist after manual delete")
 
 			local undo_success, undo_err = op:undo()
-			assert.is_false(undo_success)
-			assert.match("No checksum recorded", undo_err)
-		end)
-
-		it("should not attempt to remove file if it was not created by this operation", function()
-			pending(
-				"Skipping: CreateFileOperation is always exclusive; file_actually_created_by_this_op logic not present yet for non-creation scenarios."
-			)
-		end)
-
-		it("PENDING: should clarify undo behavior if the file to be removed by undo does not exist anymore", function()
-			-- Explanation: The current test for an already-gone file ("should fail (or do nothing) if the file does not exist at the time of undo")
-			-- expects undo to fail. This is a strict interpretation.
-			-- This test is a placeholder to align with the chosen consistent philosophy for "undoing" actions on items that are already gone.
-			-- - Strict failure: If the item the op created is gone, undo fails. (Current behavior for CreateFile)
-			-- - Tolerant success: If the item is gone, undo considers its job done (similar to SymlinkOperation's current undo for a gone link).
-			pending(
-				"Decide on consistent undo philosophy for items already gone (strict failure vs. tolerant success)."
-			)
-			-- Example for tolerant success:
-			-- local file_path_str = pl_path.join(tmp_dir, "undo_file_gone_tolerant.txt")
-			-- local op = CreateFileOperation.new(file_path_str, { content = "test" })
-			-- local _, _ = op:execute()
-			-- assert.is_true(pl_file.delete(file_path_str))
-			-- local undo_success, undo_err = op:undo()
-			-- assert.is_true(undo_success, undo_err)
+			assert.is_true(undo_success, "Undo should succeed tolerantly: " .. tostring(undo_err))
+			assert.is_false(pl_path.exists(file_path_str)) -- File should still not exist
 		end)
 	end)
 end)

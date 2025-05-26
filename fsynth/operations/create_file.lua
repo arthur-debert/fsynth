@@ -19,8 +19,8 @@ setmetatable(CreateFileOperation, { __index = Operation }) -- Inherit from Opera
 function CreateFileOperation.new(target_path, options)
 	log.debug("Creating new CreateFileOperation for target: %s", target_path)
 	local self = Operation.new(nil, target_path, options) -- Source is nil for create
-	setmetatable(self, CreateFileOperation) -- Set metatable to CreateFileOperation
-	self.options.content = self.options.content or "" -- Default content is empty string
+	setmetatable(self, CreateFileOperation)            -- Set metatable to CreateFileOperation
+	self.options.content = self.options.content or ""  -- Default content is empty string
 	self.options.create_parent_dirs = self.options.create_parent_dirs or false
 
 	-- File permissions mode to set after creation (e.g., "644", "755" on Unix-like systems;
@@ -164,10 +164,9 @@ function CreateFileOperation:undo()
 	local ok, err_msg
 
 	if not pl_path.exists(self.target) then
-		-- If the file doesn't exist, return false with error
-		err_msg = fmt("File '{}' does not exist", self.target)
-		log.error(err_msg)
-		return false, err_msg
+		-- Tolerant success: If the file doesn't exist, consider undo successful.
+		log.info("Undo: File '%s' does not exist, considering undo successful (tolerant).", self.target)
+		return true, fmt("Undo: File '{}' already did not exist.", self.target)
 	end
 
 	if not self.checksum_data.target_checksum then

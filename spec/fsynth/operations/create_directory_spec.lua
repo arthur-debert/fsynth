@@ -108,9 +108,9 @@ describe("CreateDirectoryOperation", function()
 			assert.is_false(
 				parent_writable,
 				"Parent directory '"
-				.. non_writable_parent_str
-				.. "' should be non-writable for the test to be valid. Error: "
-				.. tostring(parent_writable_err)
+					.. non_writable_parent_str
+					.. "' should be non-writable for the test to be valid. Error: "
+					.. tostring(parent_writable_err)
 			)
 
 			local dir_path_str = pl_path.join(non_writable_parent_str, "dir_in_non_writable")
@@ -277,7 +277,7 @@ describe("CreateDirectoryOperation", function()
 			assert.is_false(op.dir_actually_created_by_this_op) -- Key condition
 
 			local undo_success, undo_err = op:undo()
-			assert.is_true(undo_success, undo_err)          -- Undo should report success (no-op)
+			assert.is_true(undo_success, undo_err) -- Undo should report success (no-op)
 			assert.equal(dir_path_str, pl_path.exists(dir_path_str)) -- Directory should still exist
 		end)
 
@@ -303,27 +303,24 @@ describe("CreateDirectoryOperation", function()
 			assert.equal(dir_path_str, pl_path.exists(dir_path_str)) -- Directory should still exist
 		end)
 
-		it(
-			"should fail if the directory to be removed by undo does not exist anymore",
-			function()
-				local dir_path_str = pl_path.join(tmp_dir, "undo_dir_already_gone_test1")
-				local op = CreateDirectoryOperation.new(dir_path_str)
+		it("should fail if the directory to be removed by undo does not exist anymore", function()
+			local dir_path_str = pl_path.join(tmp_dir, "undo_dir_already_gone_test1")
+			local op = CreateDirectoryOperation.new(dir_path_str)
 
-				local success, err = op:execute()
-				assert.is_true(success, err)
-				assert.is_true(op.dir_actually_created_by_this_op)
-				assert.equal(dir_path_str, pl_path.exists(dir_path_str))
+			local success, err = op:execute()
+			assert.is_true(success, err)
+			assert.is_true(op.dir_actually_created_by_this_op)
+			assert.equal(dir_path_str, pl_path.exists(dir_path_str))
 
-				-- Manually remove the directory
-				-- path.rmdir returns true on success
-				assert.is_true(pl_path.rmdir(dir_path_str))
-				assert.is_false(pl_path.exists(dir_path_str))
+			-- Manually remove the directory
+			-- path.rmdir returns true on success
+			assert.is_true(pl_path.rmdir(dir_path_str))
+			assert.is_false(pl_path.exists(dir_path_str))
 
-				local undo_success, undo_err = op:undo()
-				assert.is_false(undo_success)
-				assert.match("is not a directory or does not exist", undo_err)
-			end
-		)
+			local undo_success, undo_err = op:undo()
+			assert.is_false(undo_success)
+			assert.match("is not a directory or does not exist", undo_err)
+		end)
 
 		-- The PENDING test block related to undo behavior for an already-gone directory is replaced by this:
 		it("should fail if the directory to be removed by undo does not exist anymore (strict failure)", function()

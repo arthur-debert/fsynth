@@ -206,7 +206,8 @@ describe("MoveOperation", function()
 
 				local success, err = op:execute()
 				assert.is_false(success)
-				assert.match("No such file or directory", err)
+				assert.match("Parent directory '.+' for target '.+' does not exist and create_parent_dirs is false", err,
+					"Error message did not match. Got: " .. tostring(err))
 				assert.are.equal(source_path_str, pl_path.exists(source_path_str))
 			end)
 		end)
@@ -246,89 +247,148 @@ describe("MoveOperation", function()
 				local op = MoveOperation.new(source_dir_str, target_file_str, { overwrite = true })
 				local valid, err = op:validate()
 				assert.is_false(valid)
-				assert.match("Cannot move a directory onto a file", err)
+				assert.match("Cannot move a directory%-like source '.+' onto an existing file '.+'", err,
+					"Error message did not match. Got: " .. tostring(err))
 			end)
 
-			it("should fail validation if moving a file onto an existing directory (current behavior)", function()
-				local source_file_str = pl_path.join(tmp_dir, "s_file_to_dir.txt")
-				create_file_for_test(source_file_str)
-				local target_dir_str = pl_path.join(tmp_dir, "t_dir_is_dir")
+			it("should move a file INTO an existing directory if target is a directory", function()
+				-- DECISION: Moving a file to a path that is an existing directory
+				-- should move the file INTO that directory.
+				local source_file_str = pl_path.join(tmp_dir, "s_file_into_dir.txt")
+				create_file_for_test(source_file_str, "content for move into dir")
+				local source_basename = pl_path.basename(source_file_str)
+
+				local target_dir_str = pl_path.join(tmp_dir, "t_existing_dir_for_move_into")
 				create_dir_for_test(target_dir_str)
-				local op = MoveOperation.new(source_file_str, target_dir_str, { overwrite = true })
-				local valid, err = op:validate()
-				assert.is_false(valid)
-				assert.match("Cannot move a file onto a directory", err)
+
+				local op = MoveOperation.new(source_file_str, target_dir_str)
+
+				-- Check validation flags (optional, execute will validate too)
+				local valid, val_err = op:validate()
+				assert.is_true(valid, "Validation failed: " .. tostring(val_err))
+				assert.is_true(op.target_is_directory_move_into, "target_is_directory_move_into should be true")
+
+				local success, exec_err = op:execute()
+				assert.is_true(success, "Execute failed: " .. tostring(exec_err))
+
+				local expected_final_path = pl_path.join(target_dir_str, source_basename)
+
+				assert.is_false(pl_path.exists(source_file_str), "Original source file should be gone")
+				assert.are.equal(expected_final_path, pl_path.exists(expected_final_path),
+					"File should exist in target directory")
+				assert.is_true(pl_path.isfile(expected_final_path), "Item in target directory should be a file")
+				assert.are.equal("content for move into dir", read_file_content(expected_final_path))
+				assert.are.equal(expected_final_path, op.actual_target_path, "actual_target_path not set correctly")
+
+				-- Test Undo
+				local initial_source_checksum = op.checksum_data.initial_source_checksum
+				local undo_success, undo_err = op:undo()
+				assert.is_true(undo_success, "Undo failed: " .. tostring(undo_err))
+				assert.is_false(pl_path.exists(expected_final_path), "File should be gone from target dir after undo")
+				assert.is_true(pl_path.exists(source_file_str), "File should be restored to original source path")
+				assert.are.equal("content for move into dir", read_file_content(source_file_str))
+				local restored_checksum = Checksum.calculate_sha256(source_file_str)
+				assert.are.equal(initial_source_checksum, restored_checksum, "Checksum mismatch after undo")
 			end)
 
-			it("PENDING: should clarify behavior when moving a file into an existing directory target", function()
-				-- Explanation: The current test "should fail validation if moving a file onto an existing directory"
-				-- confirms that `MoveOperation` treats this as an error. This is a valid design choice.
-				-- However, a common `mv` behavior is to move the source file *into* the target directory.
-				-- This pending test is to explicitly decide if the current "fail" behavior is final,
-				-- or if an option or different logic should allow moving a file into a directory.
-				pending("Decide if moving a file *into* an existing directory should be supported or always fail.")
-				-- Example (if choosing to support move into dir, perhaps with an option or by default):
-				-- local source_file_str = pl_path.join(tmp_dir, "s_file_into_dir.txt")
-				-- create_file_for_test(source_file_str, "content")
-				-- local target_dir_str = pl_path.join(tmp_dir, "t_existing_dir_for_move")
-				-- create_dir_for_test(target_dir_str)
-				--
-				-- -- Assuming MoveOperation is changed to support this, or has an option:
-				-- local op = MoveOperation.new(source_file_str, target_dir_str) -- Or MoveOperation.new(source_file_str, target_dir_str, {move_into_dir_if_exists = true})
-				-- local success, err = op:execute()
-				-- assert.is_true(success, err)
-				-- local expected_target_path = pl_path.join(target_dir_str, "s_file_into_dir.txt")
-				-- assert.is_false(pl_path.exists(source_file_str))
-				-- assert.are.equal(expected_target_path, pl_path.exists(expected_target_path))
-				-- assert.are.equal("content", read_file_content(expected_target_path))
+			it("should fail validation if source and target paths are identical", function()
+				-- DECISION: Moving a path to itself is a validation error.
+				local path_str = pl_path.join(tmp_dir, "same_path.txt")
+				create_file_for_test(path_str, "content")
+
+				-- Test with overwrite = false (default)
+				local op_no_overwrite = MoveOperation.new(path_str, path_str)
+				local valid_no_ow, err_no_ow = op_no_overwrite:validate()
+				assert.is_false(valid_no_ow, "Validation should fail for identical paths even with overwrite=false")
+				assert.match("Source path '.+' and target path '.+' are the same", err_no_ow,
+					"Error message mismatch for overwrite=false. Got: " .. tostring(err_no_ow))
+
+				-- Test with overwrite = true
+				local op_overwrite = MoveOperation.new(path_str, path_str, { overwrite = true })
+				local valid_ow, err_ow = op_overwrite:validate()
+				assert.is_false(valid_ow, "Validation should fail for identical paths even with overwrite=true")
+				assert.match("Source path '.+' and target path '.+' are the same", err_ow,
+					"Error message mismatch for overwrite=true. Got: " .. tostring(err_ow))
+
+				-- Ensure file still exists and content is unchanged
+				assert.are.equal(path_str, pl_path.exists(path_str))
+				assert.are.equal("content", read_file_content(path_str))
 			end)
 
-			it("PENDING: should handle moving a source path to the exact same target path", function()
-				-- Explanation: Test the behavior when the source and target paths are identical.
-				-- Expected: Should this be a successful no-op, or a validation error?
-				-- Most OS `mv` commands will report an error or do nothing if source and target are the same file.
-				pending("Define behavior for move operation when source and target paths are identical.")
-				-- Example (expecting a no-op success or specific validation error):
-				-- local path_str = pl_path.join(tmp_dir, "same_path.txt")
-				-- create_file_for_test(path_str, "content")
-				-- local op = MoveOperation.new(path_str, path_str)
-				--
-				-- local valid, err_validate = op:validate()
-				-- -- Option 1: Validation error
-				-- -- assert.is_false(valid)
-				-- -- assert.match("Source and target are the same", err_validate)
-				--
-				-- -- Option 2: Validation passes, execute is a no-op
-				-- assert.is_true(valid, err_validate)
-				-- local success, err_execute = op:execute()
-				-- assert.is_true(success, err_execute) -- Should be a successful no-op
-				-- assert.are.equal(path_str, pl_path.exists(path_str)) -- File still exists
-				-- assert.are.equal("content", read_file_content(path_str)) -- Content unchanged
-			end)
+			it("should correctly handle moving a symbolic link (moving the link, not the target) and allow undo",
+				function()
+					-- DECISION: MoveOperation should identify symlinks using lfs.attributes.
+					-- It should move the link itself. The link's target string is stored for undo verification.
+					-- Checksums are skipped for symlink sources.
+					if helper.is_windows() then
+						pending(
+							"Skipping symlink move test on Windows due to lfs.link permission issues or different behavior.")
+						return
+					end
 
-			it("PENDING: should correctly handle moving a symbolic link (moving the link, not the target)", function()
-				-- Explanation: Define and test the behavior of MoveOperation when the source
-				-- is a symbolic link. It should move the link itself, not the file/directory
-				-- it points to. The target of the link (the string it contains) should remain unchanged.
-				pending("Test moving of a symbolic link.")
-				-- Example:
-				-- local lfs = require("lfs")
-				-- local link_target_path = pl_path.join(tmp_dir, "actual_target.txt")
-				-- create_file_for_test(link_target_path, "link target content")
-				--
-				-- local source_symlink_path = pl_path.join(tmp_dir, "source_symlink")
-				-- assert.is_true(lfs.link(link_target_path, source_symlink_path, true))
-				--
-				-- local target_symlink_path = pl_path.join(tmp_dir, "moved_symlink")
-				--
-				-- local op = MoveOperation.new(source_symlink_path, target_symlink_path)
-				-- local success, err = op:execute()
-				-- assert.is_true(success, err)
-				-- assert.is_false(pl_path.exists(source_symlink_path))
-				-- assert.is_true(pl_path.islink(target_symlink_path))
-				-- assert.are.equal(link_target_path, lfs.symlinkattributes(target_symlink_path, "target"))
-				-- assert.are.equal("link target content", pl_file.read(target_symlink_path)) -- Reading through the moved link
-			end)
+					local lfs = require("lfs") -- Ensure lfs is available for symlink ops
+
+					-- Setup: directory, target file inside, and symlink pointing to target file
+					local file_target_name = "actual_target.txt"
+					local link_target_path_abs = pl_path.join(tmp_dir, file_target_name)
+					create_file_for_test(link_target_path_abs, "link target content")
+
+					local source_symlink_name = "source_symlink"
+					local source_symlink_path_abs = pl_path.join(tmp_dir, source_symlink_name)
+					local symlink_creation_target =
+						file_target_name -- Use relative path for link creation for robustness
+
+					local original_cwd = lfs.currentdir()
+					assert.is_true(lfs.chdir(tmp_dir), "Failed to chdir to tmp_dir for relative symlink creation")
+					local link_success, link_err = lfs.link(symlink_creation_target, source_symlink_name, true)
+					lfs.chdir(original_cwd) -- Restore CWD
+					assert.is_true(link_success, "Failed to create source symlink: " .. tostring(link_err))
+					assert.is_true(pl_path.islink(source_symlink_path_abs), "Source path is not a symlink")
+					assert.are.equal(symlink_creation_target, lfs.symlinkattributes(source_symlink_path_abs, "target"),
+						"Symlink target string mismatch after creation")
+
+					-- Target for the move operation
+					local moved_symlink_path_abs = pl_path.join(tmp_dir, "moved_symlink_location")
+
+					-- Operation
+					local op = MoveOperation.new(source_symlink_path_abs, moved_symlink_path_abs)
+
+					-- Validate (optional here, execute calls it)
+					local valid, val_err = op:validate()
+					assert.is_true(valid, "Validation failed: " .. tostring(val_err))
+					assert.is_true(op.source_is_symlink, "op.source_is_symlink should be true")
+					assert.are.equal(symlink_creation_target, op.source_symlink_target,
+						"Stored symlink target is incorrect")
+					assert.is_nil(op.checksum_data.initial_source_checksum,
+						"Initial checksum should be nil for symlink source")
+
+					-- Execute
+					local success, exec_err = op:execute()
+					assert.is_true(success, "Execute failed: " .. tostring(exec_err))
+
+					assert.is_false(pl_path.exists(source_symlink_path_abs), "Original source symlink should be gone")
+					assert.is_true(pl_path.islink(moved_symlink_path_abs), "Moved path should be a symlink")
+					assert.are.equal(symlink_creation_target, lfs.symlinkattributes(moved_symlink_path_abs, "target"),
+						"Moved symlink target string mismatch")
+					assert.are.equal(link_target_path_abs, pl_path.exists(link_target_path_abs),
+						"Original link target file should still exist")
+					assert.are.equal("link target content", pl_file.read(moved_symlink_path_abs),
+						"Reading through moved symlink failed or content mismatch")
+					assert.is_nil(op.checksum_data.final_target_checksum,
+						"Final checksum should be nil for symlink source")
+					assert.are.equal(moved_symlink_path_abs, op.actual_target_path,
+						"actual_target_path not set correctly")
+
+					-- Test Undo
+					local undo_success, undo_err = op:undo()
+					assert.is_true(undo_success, "Undo failed: " .. tostring(undo_err))
+					assert.is_false(pl_path.exists(moved_symlink_path_abs), "Moved symlink should be gone after undo")
+					assert.is_true(pl_path.islink(source_symlink_path_abs), "Original symlink should be restored")
+					assert.are.equal(symlink_creation_target, lfs.symlinkattributes(source_symlink_path_abs, "target"),
+						"Restored symlink target string mismatch")
+					assert.are.equal("link target content", pl_file.read(source_symlink_path_abs),
+						"Reading through restored symlink failed or content mismatch")
+				end)
 		end)
 
 		describe("Checksums (for file moves)", function()
@@ -430,13 +490,15 @@ describe("MoveOperation", function()
 			local op = MoveOperation.new(source_path_str, target_path_str)
 			local exec_success, exec_err = op:execute()
 			assert.is_true(exec_success, exec_err)
-			assert.are.equal(target_path_str, pl_path.exists(target_path_str))
+			assert.are.equal(op.actual_target_path or target_path_str,
+				pl_path.exists(op.actual_target_path or target_path_str))
 
-			assert.is_true(pl_file.delete(target_path_str))
+			assert.is_true(pl_file.delete(op.actual_target_path or target_path_str))
 
 			local undo_success, undo_err = op:undo()
 			assert.is_false(undo_success)
-			assert.match("Item to undo move from target .* does not exist", undo_err)
+			assert.match("Item to undo move from '.+' does not exist", undo_err,
+				"Error message did not match. Got: " .. tostring(undo_err))
 			assert.is_false(pl_path.exists(source_path_str))
 		end)
 

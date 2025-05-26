@@ -1,4 +1,12 @@
+local pl_path = require("pl.path")
+
 -- Helper functions for fsynth tests
+
+local M = {}
+
+function M.is_windows()
+	return pl_path.sep == "\\\\"
+end
 
 -- Get the temporary directory for tests
 local function get_tmp_dir()
@@ -39,4 +47,9 @@ return {
 	get_tmp_dir = get_tmp_dir,
 	clean_tmp_dir = clean_tmp_dir,
 	rmdir_recursive = rmdir_recursive,
+	is_windows = M.is_windows,
+	readlink = function(path_str)
+		local lfs = require("lfs")
+		return lfs.symlinkattributes(path_str, "target")
+	end,
 }
