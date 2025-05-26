@@ -18,8 +18,7 @@ jobs:
         uses: actions/cache@v3
         with:
           path: /var/cache/apt/archives
-          key:
-            ${{ runner.os }}-apt-${{ hashFiles('.github/workflows/tests.yml') }}
+          key: ${{ runner.os }}-apt-${{ hashFiles('.github/workflows/tests.yml') }}
           restore-keys: |
             ${{ runner.os }}-apt-
 
@@ -33,12 +32,13 @@ jobs:
         uses: actions/cache@v3
         with:
           path: .luarocks
-          key:
-            ${{ runner.os }}-luarocks-${{ hashFiles('fsynth-0.1.0-1.rockspec')
-            }}
+          key: ${{ runner.os }}-luarocks-${{ hashFiles('fsynth-0.1.0-1.rockspec') }}
           restore-keys: |
             ${{ runner.os }}-luarocks-
 
+      - name: print me
+        run: |
+          pwd ; ls -lah
       - name: Install Lua dependencies
         if: steps.cache-lua-deps.outputs.cache-hit != 'true'
         run: |
