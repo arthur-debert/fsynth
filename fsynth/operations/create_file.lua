@@ -18,10 +18,10 @@ setmetatable(CreateFileOperation, { __index = Operation }) -- Inherit from Opera
 function CreateFileOperation.new(target_path, options)
 	log.debug("Creating new CreateFileOperation for target: %s", target_path)
 	local self = Operation.new(nil, target_path, options) -- Source is nil for create
-	setmetatable(self, CreateFileOperation)            -- Set metatable to CreateFileOperation
-	self.options.content = self.options.content or ""  -- Default content is empty string
+	setmetatable(self, CreateFileOperation) -- Set metatable to CreateFileOperation
+	self.options.content = self.options.content or "" -- Default content is empty string
 	self.options.create_parent_dirs = self.options.create_parent_dirs or false
-	self.checksum_data.target_checksum = nil           -- Specific to CreateFile, not in base Operation new()
+	self.checksum_data.target_checksum = nil -- Specific to CreateFile, not in base Operation new()
 	return self
 end
 

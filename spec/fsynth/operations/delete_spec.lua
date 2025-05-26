@@ -220,8 +220,10 @@ describe("DeleteOperation", function()
 				local undo_success, undo_err = op:undo()
 				assert.is_false(undo_success)
 				assert.match("already exists", undo_err)
-				assert.are.equal(pl_path.join(dir_path_str, "marker.txt"),
-					pl_path.exists(pl_path.join(dir_path_str, "marker.txt")))
+				assert.are.equal(
+					pl_path.join(dir_path_str, "marker.txt"),
+					pl_path.exists(pl_path.join(dir_path_str, "marker.txt"))
+				)
 			end)
 		end)
 
@@ -253,8 +255,10 @@ describe("DeleteOperation", function()
 				local undo_success, undo_err = op:undo()
 				assert.is_true(undo_success, undo_err)
 				assert.are.equal(dir_path_str, pl_path.exists(dir_path_str))
-				assert.are.equal(pl_path.join(dir_path_str, "child.txt"),
-					pl_path.exists(pl_path.join(dir_path_str, "child.txt")))
+				assert.are.equal(
+					pl_path.join(dir_path_str, "child.txt"),
+					pl_path.exists(pl_path.join(dir_path_str, "child.txt"))
+				)
 			end)
 		end)
 

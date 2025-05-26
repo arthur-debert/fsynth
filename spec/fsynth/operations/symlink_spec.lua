@@ -74,8 +74,10 @@ describe("SymlinkOperation", function()
 				assert.are.equal(link_target_dir_str, readlink(link_path_str))
 				assert.is_true(op.link_actually_created)
 				assert.is_true(pl_path.isdir(link_path_str)) -- Symlink to dir is also a dir
-				assert.are.equal(pl_path.join(link_path_str, "child.txt"),
-					pl_path.exists(pl_path.join(link_path_str, "child.txt")))
+				assert.are.equal(
+					pl_path.join(link_path_str, "child.txt"),
+					pl_path.exists(pl_path.join(link_path_str, "child.txt"))
+				)
 				assert.are.equal("child content", pl_file.read(pl_path.join(link_path_str, "child.txt")))
 			end)
 
@@ -179,8 +181,10 @@ describe("SymlinkOperation", function()
 				local success, err = op:execute()
 
 				assert.is_true(success, err)
-				assert.are.equal(pl_path.join(tmp_dir, "parent", "child"),
-					pl_path.exists(pl_path.join(tmp_dir, "parent", "child")))
+				assert.are.equal(
+					pl_path.join(tmp_dir, "parent", "child"),
+					pl_path.exists(pl_path.join(tmp_dir, "parent", "child"))
+				)
 				assert.is_true(pl_path.isdir(pl_path.join(tmp_dir, "parent")))
 				assert.is_true(pl_path.islink(link_path_str))
 				assert.are.equal(link_target_path_str, readlink(link_path_str))

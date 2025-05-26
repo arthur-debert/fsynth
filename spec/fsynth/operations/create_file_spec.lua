@@ -61,8 +61,10 @@ describe("CreateFileOperation", function()
 
 				local success, err = op:execute()
 				assert.is_true(success, err)
-				assert.are.equal(pl_path.join(tmp_dir, "parent", "child"),
-					pl_path.exists(pl_path.join(tmp_dir, "parent", "child")))
+				assert.are.equal(
+					pl_path.join(tmp_dir, "parent", "child"),
+					pl_path.exists(pl_path.join(tmp_dir, "parent", "child"))
+				)
 				assert.are.equal(pl_path.join(tmp_dir, "parent"), pl_path.exists(pl_path.join(tmp_dir, "parent")))
 				assert.are.equal(file_path_str, pl_path.exists(file_path_str))
 				assert.are.equal(content, read_file_content(file_path_str))

@@ -65,7 +65,7 @@ function DeleteOperation:validate()
 				return false,
 					fmt(
 						"Directory '{}' is not empty and recursive delete with safety limits is not yet "
-						.. "implemented. Only empty directory deletion is supported currently.",
+							.. "implemented. Only empty directory deletion is supported currently.",
 						self.source
 					)
 			end
@@ -74,7 +74,7 @@ function DeleteOperation:validate()
 				return false,
 					fmt(
 						"Directory '{}' is not empty. Use is_recursive=true for empty directories "
-						.. "or wait for full recursive delete functionality.",
+							.. "or wait for full recursive delete functionality.",
 						self.source
 					)
 			end
@@ -96,7 +96,7 @@ function DeleteOperation:validate()
 			return false,
 				fmt(
 					"Failed to read file '{}' for deletion: Penlight pl_file.read returned nil "
-					.. "(possibly unreadable).",
+						.. "(possibly unreadable).",
 					self.source
 				)
 		end
@@ -154,10 +154,9 @@ function DeleteOperation:execute()
 	else -- It's a file
 		local os_remove_pcall_ok, os_remove_ret1, os_remove_ret2 = pcall(os.remove, self.source)
 		if not os_remove_pcall_ok then
-			return false,
-				fmt("Failed to delete file '{}' (pcall error): {}", self.source, tostring(os_remove_ret1)) -- ret1 is error from pcall
+			return false, fmt("Failed to delete file '{}' (pcall error): {}", self.source, tostring(os_remove_ret1)) -- ret1 is error from pcall
 		end
-		if not os_remove_ret1 then                                                             -- os.remove failed (returned nil, errmsg)
+		if not os_remove_ret1 then -- os.remove failed (returned nil, errmsg)
 			return false, fmt("Failed to delete file '{}': {}", self.source, os_remove_ret2 or "unknown OS error")
 		end
 	end
@@ -243,7 +242,7 @@ function DeleteOperation:undo()
 			return false,
 				fmt(
 					"Undo: Checksum mismatch after restoring file '{}'. "
-					.. "Content may be corrupt. Expected: {}, Got: {}",
+						.. "Content may be corrupt. Expected: {}, Got: {}",
 					self.source,
 					self.checksum_data.original_checksum or "nil",
 					current_checksum or "nil"

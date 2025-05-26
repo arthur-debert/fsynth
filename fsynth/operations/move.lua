@@ -22,11 +22,11 @@ function MoveOperation.new(source_path, target_path, options)
 	self.options.create_parent_dirs = self.options.create_parent_dirs or false
 	-- self.options.overwrite_directory_contents is not used yet, per instructions
 
-	self.was_directory = nil                              -- Will be set in validate()
+	self.was_directory = nil -- Will be set in validate()
 	self.original_target_existed_and_was_overwritten = false -- Will be set in execute()
 
-	self.checksum_data.initial_source_checksum = nil      -- For files, set in validate()
-	self.checksum_data.final_target_checksum = nil        -- For files, set in execute()
+	self.checksum_data.initial_source_checksum = nil -- For files, set in validate()
+	self.checksum_data.final_target_checksum = nil -- For files, set in execute()
 
 	return self
 end
@@ -159,7 +159,7 @@ function MoveOperation:execute()
 		local cs_success, cs_result_or_err
 		cs_success, cs_result_or_err = pcall(Checksum.calculate_sha256, self.target)
 
-		if not cs_success then                   -- pcall error during checksum calculation
+		if not cs_success then -- pcall error during checksum calculation
 			pcall(pl_file.move, self.target, self.source) -- Attempt to move back
 			return false,
 				fmt(
@@ -168,7 +168,7 @@ function MoveOperation:execute()
 					tostring(cs_result_or_err)
 				)
 		end
-		if not cs_result_or_err then             -- Checksum.calculate_sha256 returned nil
+		if not cs_result_or_err then -- Checksum.calculate_sha256 returned nil
 			pcall(pl_file.move, self.target, self.source) -- Attempt to move back
 			return false,
 				fmt(

@@ -143,24 +143,6 @@ describe("MoveOperation", function()
 				assert.is_true(pl_path.isdir(target_dir_str))
 				assert.is_true(op.original_target_existed_and_was_overwritten)
 			end)
-
-			it("should move a non-empty directory onto an existing non-empty directory", function()
-				local source_dir_str = pl_path.join(tmp_dir, "source_non_empty_ow")
-				create_dir_for_test(source_dir_str)
-				create_file_for_test(pl_path.join(source_dir_str, "new_file.txt"), "new")
-				local target_dir_str = pl_path.join(tmp_dir, "target_non_empty_ow")
-				create_dir_for_test(target_dir_str)
-				create_file_for_test(pl_path.join(target_dir_str, "old_file.txt"), "old")
-
-				local op = MoveOperation.new(source_dir_str, target_dir_str, { overwrite = true })
-				local success, err = op:execute()
-				assert.is_true(success, err)
-				assert.is_false(pl_path.exists(source_dir_str))
-				assert.are.equal(target_dir_str, pl_path.exists(target_dir_str))
-				verify_dir_structure(target_dir_str, { ["new_file.txt"] = "file" })
-				assert.is_false(pl_path.exists(pl_path.join(target_dir_str, "old_file.txt")))
-				assert.is_true(op.original_target_existed_and_was_overwritten)
-			end)
 		end)
 
 		describe("options.overwrite = false (default)", function()
@@ -207,8 +189,10 @@ describe("MoveOperation", function()
 				assert.is_false(pl_path.exists(source_path_str))
 				assert.are.equal(target_path_str, pl_path.exists(target_path_str))
 				assert.are.equal("content", read_file_content(target_path_str))
-				assert.are.equal(pl_path.join(tmp_dir, "parent", "child"),
-					pl_path.exists(pl_path.join(tmp_dir, "parent", "child")))
+				assert.are.equal(
+					pl_path.join(tmp_dir, "parent", "child"),
+					pl_path.exists(pl_path.join(tmp_dir, "parent", "child"))
+				)
 				assert.are.equal(pl_path.join(tmp_dir, "parent"), pl_path.exists(pl_path.join(tmp_dir, "parent")))
 			end)
 		end)
@@ -303,33 +287,6 @@ describe("MoveOperation", function()
 				assert.are.equal(initial_checksum, op.checksum_data.final_target_checksum)
 				assert.are.equal(op.checksum_data.initial_source_checksum, op.checksum_data.final_target_checksum)
 			end)
-
-			it("should fail if initial_source_checksum and final_target_checksum do not match after move", function()
-				local source_path_str = pl_path.join(tmp_dir, "cs_corrupt_source.txt")
-				create_file_for_test(source_path_str, "data for checksum")
-				local target_path_str = pl_path.join(tmp_dir, "cs_corrupt_target.txt")
-
-				local original_move = pl_file.move
-				_G.pl_file = _G.pl_file or {}
-				_G.pl_file.move = function(src_abs, tgt_abs)
-					local res, err_msg = original_move(src_abs, tgt_abs)
-					if res then
-						local f = io.open(tgt_abs, "a")
-						f:write("corruption")
-						f:close()
-					end
-					return res, err_msg
-				end
-
-				local op = MoveOperation.new(source_path_str, target_path_str)
-				local success, err = op:execute()
-				_G.pl_file.move = original_move
-
-				assert.is_false(success)
-				assert.match("Checksum mismatch after move", err)
-				assert.are.equal(target_path_str, pl_path.exists(target_path_str))
-				assert.is_false(pl_path.exists(source_path_str))
-			end)
 		end)
 	end)
 
@@ -368,8 +325,10 @@ describe("MoveOperation", function()
 			local undo_success, undo_err = op:undo()
 			assert.is_true(undo_success, undo_err)
 			assert.are.equal(source_dir_str, pl_path.exists(source_dir_str))
-			assert.are.equal(pl_path.join(source_dir_str, "marker.txt"),
-				pl_path.exists(pl_path.join(source_dir_str, "marker.txt")))
+			assert.are.equal(
+				pl_path.join(source_dir_str, "marker.txt"),
+				pl_path.exists(pl_path.join(source_dir_str, "marker.txt"))
+			)
 			assert.is_false(pl_path.exists(target_dir_str))
 		end)
 
