@@ -63,18 +63,26 @@ This document describes the techinical setup for this project.
 
 3. Logging
 
-    Logging is done through log.lua. This makes it possible to have generous log that can be activated at runtime. Using print either litters the excecution or requiress coding & build before debugging, not feasible.
-        - Uses the `log` library for all logging operations
-        - Log file is automatically truncated at startup
-        - Default log level is "info" for console output
-        - All levels (trace through fatal) are logged to file
-        - Log file is stored at "/var/tmp/lua-fsynth.log"
-        - Log entries include timestamp, source file, and line number
-        - Always use the log module instead of print statements
+    Logging is managed by `fsynth/logging.lua`, which utilizes the `log.lua` library. This setup allows for flexible runtime log configuration.
+        - If the `log.lua` dependency cannot be imported, the application will crash with the error: "Only fix is fixing the dependency improt".
+        - The log file path is determined by the `FSYNTH_LOG_FILE` environment variable. If not set, it defaults to "/var/tmp/lua-fsynth.log".
+        - The log file is automatically truncated at the start of the application.
+        - File logging is always active, capturing messages based on the configured log level.
+        - Console logging behavior and the active log level are controlled by the `FSYNTH_LOG_VERBOSITY` environment variable:
+            - Default (if `FSYNTH_LOG_VERBOSITY` is empty or not set):
+                - Log Level: "debug"
+                - Console Output: Plain (no color)
+            - `FSYNTH_LOG_VERBOSITY="v"`:
+                - Log Level: "info"
+                - Console Output: Plain (no color)
+            - `FSYNTH_LOG_VERBOSITY="vv"`:
+                - Log Level: "debug"
+                - Console Output: Colored (for higher visibility)
+        - Log entries (handled by `log.lua`) include timestamp, log level, source file:line, and the message.
+        - Always use the configured `log` object for application logging instead of raw `print` statements for better control and consistency.
     -- Important ! always use this!
 
         local helper = require("spec.spec_helper")
-
         describe("Processor", function()
         -- Set up test environment
         setup(function()
