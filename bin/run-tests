@@ -4,8 +4,8 @@
 # This script first sources the environment setup and then runs busted
 
 # Get the directory where the script is located
-SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
-PROJECT_ROOT="$( cd "${SCRIPT_DIR}/.." && pwd )"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
 # Source the environment setup script
 source "${SCRIPT_DIR}/luapath.sh"
@@ -15,4 +15,4 @@ export FSYNTH_TEST_MODE=1
 
 # Run the tests
 echo "Running tests for fsynth..."
-run_busted "$@"
+busted "$@"

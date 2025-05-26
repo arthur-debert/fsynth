@@ -11,10 +11,6 @@ if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
 fi
 
 # Get the directory where the script is located
-SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
-PROJECT_ROOT="$( cd "${SCRIPT_DIR}/.." && pwd )"
-PACKAGE_NAME="fsynth"
-LIB_NAME="${PACKAGE_NAME}"
 
 # Check if luarocks is installed
 if ! command -v luarocks &>/dev/null; then
@@ -39,11 +35,7 @@ export PATH="${PROJECT_ROOT}/.luarocks/bin:$PATH"
 
 # Define a function to run busted tests
 run_busted() {
-    local busted_path="${PROJECT_ROOT}/.luarocks/bin/busted"
-    if [ -x "$busted_path" ]; then
-        echo "Running tests using local busted installation..."
-        "${busted_path}" "$@"
-    elif command -v busted &>/dev/null; then
+    if command -v busted &>/dev/null; then
         echo "Running tests using global busted installation..."
         busted "$@"
     else
