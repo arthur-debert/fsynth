@@ -1,0 +1,27 @@
+Alter the follwing files to use the string formating lib.
+
+local fmt = require("string.format.all")
+# example       local err_msg = fmt("Target path '{}' exists and is a file.", self.target)
+
+
+fsynth/checksum.lua
+fsynth/init.lua
+fsynth/operation_base.lua
+fsynth/processor.lua
+fsynth/queue.lua
+fsynth/utils.lua
+
+
+1. ./fsynth/checksum.lua
+2. ./fsynth/init.lua
+3. ./fsynth/log.lua
+4. ./fsynth/operation_base.lua
+5. ./fsynth/operations/copy_file.lua
+6. ./fsynth/operations/create_directory.lua
+7. ./fsynth/operations/create_file.lua
+8. ./fsynth/operations/delete.lua
+9. ./fsynth/operations/move.lua
+10. ./fsynth/operations/symlink.lua
+11. ./fsynth/processor.lua
+12. ./fsynth/queue.lua
+13. ./fsynth/utils.lua
