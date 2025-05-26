@@ -100,7 +100,8 @@ describe("SymlinkOperation", function()
 				-- correctly creating relative links. lfs.symlinkattributes should return the stored relative path.
 				if helper.is_windows() then
 					pending(
-					"Skipping relative symlink test on Windows due to potential behavior differences or permission issues.")
+						"Skipping relative symlink test on Windows due to potential behavior differences or permission issues."
+					)
 					return
 				end
 
@@ -131,21 +132,34 @@ describe("SymlinkOperation", function()
 				-- Verify the stored target is the relative path we provided
 				local stored_target = readlink(link_abs_path)
 				-- Normalize paths for comparison, especially for Windows vs Unix slashes if lfs does not normalize readlink output
-				assert.are.equal(pl_path.normpath(relative_link_target_str), pl_path.normpath(stored_target),
-					"Stored symlink target mismatch.")
+				assert.are.equal(
+					pl_path.normpath(relative_link_target_str),
+					pl_path.normpath(stored_target),
+					"Stored symlink target mismatch."
+				)
 
 				-- Verify that reading through the link works
-				assert.are.equal("relative target content", pl_file.read(link_abs_path),
-					"Reading through relative symlink failed or content mismatch.")
-				assert.is_true(pl_path.exists(link_abs_path), "Relative symlink should resolve and exist.")
+				assert.are.equal(
+					"relative target content",
+					pl_file.read(link_abs_path),
+					"Reading through relative symlink failed or content mismatch."
+				)
+				assert.are.equal(
+					link_abs_path,
+					pl_path.exists(link_abs_path),
+					"Relative symlink should resolve and exist."
+				)
 
 				-- Test Undo
 				local undo_success, undo_err = op:undo()
 				assert.is_true(undo_success, "Undo failed: " .. tostring(undo_err))
 				assert.is_false(pl_path.islink(link_abs_path), "Symlink should be removed after undo")
 				assert.is_false(pl_path.exists(link_abs_path), "Symlink path should not exist after undo")
-				assert.are.equal(target_file_abs_path, pl_path.exists(target_file_abs_path),
-					"Original target file should still exist after undo")
+				assert.are.equal(
+					target_file_abs_path,
+					pl_path.exists(target_file_abs_path),
+					"Original target file should still exist after undo"
+				)
 			end)
 		end)
 

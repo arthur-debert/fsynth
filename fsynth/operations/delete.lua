@@ -46,8 +46,13 @@ function DeleteOperation:validate()
 		log.debug("Validate Delete: Item '{}' is a symlink.", self.source)
 		local pcall_ok, link_target = pcall(lfs.symlinkattributes, self.source, "target")
 		if not pcall_ok or link_target == nil then
-			log.warn(fmt("Could not read target of symlink '{}' (possibly broken): {}", self.source,
-				tostring(link_target or (pcall_ok and "nil") or "pcall error")))
+			log.warn(
+				fmt(
+					"Could not read target of symlink '{}' (possibly broken): {}",
+					self.source,
+					tostring(link_target or (pcall_ok and "nil") or "pcall error")
+				)
+			)
 			self.original_link_target = nil
 		else
 			self.original_link_target = link_target
@@ -71,13 +76,21 @@ function DeleteOperation:validate()
 			log.debug("Validate Delete: Item '{}' is a directory.", self.source)
 			-- Check if directory is empty (recursive delete not fully supported yet)
 			local files, dirs
-			local pcall_ok_files, pcall_val_files = pcall(function() files = pl_dir.getfiles(self.source) end)
-			local pcall_ok_dirs, pcall_val_dirs = pcall(function() dirs = pl_dir.getdirectories(self.source) end)
+			local pcall_ok_files, pcall_val_files = pcall(function()
+				files = pl_dir.getfiles(self.source)
+			end)
+			local pcall_ok_dirs, pcall_val_dirs = pcall(function()
+				dirs = pl_dir.getdirectories(self.source)
+			end)
 
 			if not pcall_ok_files or not pcall_ok_dirs then
 				return false,
-					fmt("Error checking if directory '{}' is empty: files_err={}, dirs_err={}", self.source,
-						tostring(pcall_val_files), tostring(pcall_val_dirs))
+					fmt(
+						"Error checking if directory '{}' is empty: files_err={}, dirs_err={}",
+						self.source,
+						tostring(pcall_val_files),
+						tostring(pcall_val_dirs)
+					)
 			end
 
 			-- Penlight's getfiles/getdirectories return empty tables if dir is empty, not nil.
@@ -91,7 +104,8 @@ function DeleteOperation:validate()
 				-- Or, this could be where we list contents for a full recursive delete op.
 				log.warn(
 					"Validate Delete: Directory '{}' is not empty. Non-empty recursive delete not yet implemented, will likely fail in execute unless emptied first.",
-					self.source)
+					self.source
+				)
 				-- We can let it pass validation and os.remove in execute will fail if not empty.
 			end
 			self.original_content = nil
@@ -100,30 +114,48 @@ function DeleteOperation:validate()
 			self.item_type = "file"
 			log.debug("Validate Delete: Item '{}' is a file.", self.source)
 			local content
-			local pcall_read_ok, pcall_read_val = pcall(function() content = pl_file.read(self.source) end)
+			local pcall_read_ok, pcall_read_val = pcall(function()
+				content = pl_file.read(self.source)
+			end)
 			if not pcall_read_ok then
 				return false,
-					fmt("Failed to read file '{}' for deletion (pcall error): {}", self.source, tostring(pcall_read_val))
+					fmt(
+						"Failed to read file '{}' for deletion (pcall error): {}",
+						self.source,
+						tostring(pcall_read_val)
+					)
 			end
 			if content == nil then -- pl_file.read returns nil on error (e.g., unreadable)
-				log.warn(fmt(
-					"File '{}' content is nil (unreadable or access error?). Original content for undo will be empty string.",
-					self.source))
+				log.warn(
+					fmt(
+						"File '{}' content is nil (unreadable or access error?). Original content for undo will be empty string.",
+						self.source
+					)
+				)
 				self.original_content = "" -- Store empty string for undo if unreadable
 			else
 				self.original_content = content
 			end
 
 			local cs_result
-			local pcall_cs_ok, pcall_cs_val = pcall(function() cs_result = Checksum.calculate_sha256(self.source) end)
+			local pcall_cs_ok, pcall_cs_val = pcall(function()
+				cs_result = Checksum.calculate_sha256(self.source)
+			end)
 			if not pcall_cs_ok then
 				return false,
-					fmt("Failed to calculate checksum for file '{}' (pcall error): {}", self.source,
-						tostring(pcall_cs_val))
+					fmt(
+						"Failed to calculate checksum for file '{}' (pcall error): {}",
+						self.source,
+						tostring(pcall_cs_val)
+					)
 			end
 			if not cs_result then
-				log.warn(fmt("Failed to calculate checksum for file '{}' (result was nil). Storing nil checksum.",
-					self.source))
+				log.warn(
+					fmt(
+						"Failed to calculate checksum for file '{}' (result was nil). Storing nil checksum.",
+						self.source
+					)
+				)
 				self.checksum_data.original_checksum = nil
 			else
 				self.checksum_data.original_checksum = cs_result
@@ -145,7 +177,10 @@ function DeleteOperation:execute()
 		if not valid then
 			if validate_err and type(validate_err) == "string" and validate_err:match("does not exist") then
 				self.item_actually_deleted = false
-				log.info("Execute Delete: Validation confirmed path '%s' does not exist. Tolerant success.", self.source)
+				log.info(
+					"Execute Delete: Validation confirmed path '%s' does not exist. Tolerant success.",
+					self.source
+				)
 				return true
 			end
 			log.error("Execute Delete: Validation failed for '%s': %s", self.source, validate_err)
@@ -162,16 +197,19 @@ function DeleteOperation:execute()
 	local attrs = lfs.attributes(self.source)
 	if not attrs then
 		self.item_actually_deleted = false
-		log.info("Execute Delete: Path '%s' not found or inaccessible immediately before os.remove. Tolerant success.",
-			self.source)
+		log.info(
+			"Execute Delete: Path '%s' not found or inaccessible immediately before os.remove. Tolerant success.",
+			self.source
+		)
 		return true -- If it's gone now, consider the job done.
 	end
 
 	log.debug("Execute Delete: Proceeding with os.remove for '%s' (actual mode via lfs: %s)", self.source, attrs.mode)
 	local remove_pcall_ok, remove_success, remove_err_msg = pcall(os.remove, self.source)
 
-	if not remove_pcall_ok then                                                                                      -- pcall itself failed
-		local err = fmt("Failed to delete '%s' (pcall error during os.remove): %s", self.source, tostring(remove_success)) -- remove_success is the error in this case
+	if not remove_pcall_ok then -- pcall itself failed
+		local err =
+			fmt("Failed to delete '%s' (pcall error during os.remove): %s", self.source, tostring(remove_success)) -- remove_success is the error in this case
 		log.error(err)
 		return false, err
 	end
@@ -188,12 +226,17 @@ function DeleteOperation:execute()
 end
 
 function DeleteOperation:undo()
-	log.info("Undo Delete: Attempting for path '%s' (original type: %s)", self.source or "unknown",
-		self.item_type or "unknown")
+	log.info(
+		"Undo Delete: Attempting for path '%s' (original type: %s)",
+		self.source or "unknown",
+		self.item_type or "unknown"
+	)
 
 	if not self.item_actually_deleted then
-		log.info("Undo Delete: Item was not marked as deleted by this operation for '%s'. No action required.",
-			self.source or "unknown")
+		log.info(
+			"Undo Delete: Item was not marked as deleted by this operation for '%s'. No action required.",
+			self.source or "unknown"
+		)
 		return true, "Undo: Item was not marked as deleted by this operation."
 	end
 
@@ -209,30 +252,39 @@ function DeleteOperation:undo()
 		log.info("Undo Delete: Recreating directory '%s'", self.source)
 		pcall_ok, success_flag, op_errmsg = pcall(pl_path.mkdir, self.source)
 		if not pcall_ok or not success_flag then
-			local err = fmt("Undo Delete: Failed to recreate directory '%s': %s", self.source,
-				tostring(op_errmsg or (pcall_ok and success_flag) or "pcall error"))
+			local err = fmt(
+				"Undo Delete: Failed to recreate directory '%s': %s",
+				self.source,
+				tostring(op_errmsg or (pcall_ok and success_flag) or "pcall error")
+			)
 			log.error(err)
 			return false, err
 		end
 		log.info("Undo Delete: Directory '%s' recreated.", self.source)
 	elseif self.item_type == "symlink" then
 		if self.original_link_target == nil then
-			log.warn(fmt(
-				"Undo Delete: Cannot recreate symlink '%s' as original target was nil (possibly a broken link that couldn't be read).",
-				self.source))
+			log.warn(
+				fmt(
+					"Undo Delete: Cannot recreate symlink '%s' as original target was nil (possibly a broken link that couldn't be read).",
+					self.source
+				)
+			)
 			-- This is a tricky case. If the original link was broken and we deleted it,
 			-- we can't recreate it as it was. Failing might be safer.
 			return false, "Undo Delete: Original symlink target was not recorded (possibly broken link)."
 		end
 		log.info("Undo Delete: Recreating symlink '%s' -> '%s'", self.source, self.original_link_target)
 		pcall_ok, success_flag, op_errmsg = pcall(lfs.link, self.original_link_target, self.source, true)
-		if not pcall_ok or not success_flag then                 -- lfs.link returns true on success, or (nil, error message)
+		if not pcall_ok or not success_flag then -- lfs.link returns true on success, or (nil, error message)
 			local err_detail = op_errmsg
 			if pcall_ok and success_flag == nil and op_errmsg == nil then -- lfs.link can return (nil, nil) on some errors
 				err_detail = "lfs.link failed without specific error message"
 			end
-			local err = fmt("Undo Delete: Failed to recreate symlink '%s': %s", self.source,
-				tostring(err_detail or (pcall_ok and success_flag) or "pcall error"))
+			local err = fmt(
+				"Undo Delete: Failed to recreate symlink '%s': %s",
+				self.source,
+				tostring(err_detail or (pcall_ok and success_flag) or "pcall error")
+			)
 			log.error(err)
 			return false, err
 		end
@@ -241,7 +293,8 @@ function DeleteOperation:undo()
 		if self.original_content == nil then
 			local err = fmt(
 				"Undo Delete: No original content stored (was nil or unreadable), cannot accurately undo file deletion for '%s'.",
-				self.source)
+				self.source
+			)
 			log.error(err)
 			-- Decide if we should create an empty file or fail. Failing seems safer if content is unknown.
 			return false, err
@@ -249,36 +302,62 @@ function DeleteOperation:undo()
 		log.info("Undo Delete: Recreating file '%s'", self.source)
 		pcall_ok, success_flag, op_errmsg = pcall(pl_file.write, self.source, self.original_content)
 		if not pcall_ok or not success_flag then
-			local err = fmt("Undo Delete: Failed to restore file '%s': %s", self.source,
-				tostring(op_errmsg or (pcall_ok and success_flag) or "pcall error"))
+			local err = fmt(
+				"Undo Delete: Failed to restore file '%s': %s",
+				self.source,
+				tostring(op_errmsg or (pcall_ok and success_flag) or "pcall error")
+			)
 			log.error(err)
 			return false, err
 		end
 		log.info("Undo Delete: File '%s' recreated.", self.source)
 
 		-- Verify Checksum for files if original checksum was available
-		if self.checksum_data.original_checksum then
-			log.debug("Undo Delete: Verifying checksum for restored file '%s'", self.source)
-			local current_checksum
-			local cs_pcall_ok, cs_pcall_val = pcall(function() current_checksum = Checksum.calculate_sha256(self.source) end)
-			if not cs_pcall_ok or not current_checksum then
-				log.warn(fmt("Undo Delete: Failed to calculate checksum for restored file '%s': {}. Continuing undo.",
-					self.source, tostring(cs_pcall_val or "checksum calculation failed")))
-			elseif current_checksum ~= self.checksum_data.original_checksum then
-				log.warn(fmt(
-					"Undo Delete: Checksum mismatch for restored file '%s'. Expected: {}, Got: {}. Continuing undo.",
-					self.source, self.checksum_data.original_checksum, current_checksum))
-			else
-				log.debug("Undo Delete: Checksum verified for restored file '%s'.", self.source)
-			end
-		else
+		if not self.checksum_data.original_checksum then
+			local err = fmt(
+				"Undo Delete: Original checksum not available for file '%s'. Cannot verify integrity and ensure safe undo.",
+				self.source
+			)
+			log.error(err)
+			return false, err -- FAIL if original_checksum was nil
+		end
+
+		-- If original_checksum IS available, proceed to verify current against it (mismatch is a warning)
+		log.debug(
+			"Undo Delete: Verifying checksum for restored file '%s' against original '%s'",
+			self.source,
+			self.checksum_data.original_checksum
+		)
+		local current_checksum
+		local cs_pcall_ok, cs_pcall_val = pcall(function()
+			current_checksum = Checksum.calculate_sha256(self.source)
+		end)
+		if not cs_pcall_ok or not current_checksum then
 			log.warn(
-				"Undo Delete: No original checksum was stored for file '%s'; cannot verify restored content integrity.",
-				self.source)
+				fmt(
+					"Undo Delete: Failed to calculate checksum for restored file '%s': {}. Continuing undo.",
+					self.source,
+					tostring(cs_pcall_val or "checksum calculation failed")
+				)
+			)
+		elseif current_checksum ~= self.checksum_data.original_checksum then
+			log.warn(
+				fmt(
+					"Undo Delete: Checksum mismatch for restored file '%s'. Expected: {}, Got: {}. Continuing undo.",
+					self.source,
+					self.checksum_data.original_checksum,
+					current_checksum
+				)
+			)
+		else
+			log.debug("Undo Delete: Checksum verified for restored file '%s'.", self.source)
 		end
 	else
-		local err = fmt("Undo Delete: Unknown item_type '%s' for path '%s'. Cannot perform undo.",
-			self.item_type or "nil", self.source)
+		local err = fmt(
+			"Undo Delete: Unknown item_type '%s' for path '%s'. Cannot perform undo.",
+			self.item_type or "nil",
+			self.source
+		)
 		log.error(err)
 		return false, err
 	end

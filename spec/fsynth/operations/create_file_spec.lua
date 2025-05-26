@@ -2,9 +2,9 @@ local helper = require("spec.spec_helper")
 local CreateFileOperation = require("fsynth.operations.create_file")
 local file_permissions = require("fsynth.file_permissions") -- Added
 local pl_path = require("pl.path")
-local pl_file = require("pl.file")                          -- Updated import - using file instead of fs
+local pl_file = require("pl.file") -- Updated import - using file instead of fs
 
-local is_windows = pl_path.sep == "\\\\"                    -- Added
+local is_windows = pl_path.sep == "\\\\" -- Added
 
 describe("CreateFileOperation", function()
 	local tmp_dir
@@ -128,9 +128,9 @@ describe("CreateFileOperation", function()
 			assert.is_false(
 				parent_writable,
 				"Parent directory '"
-				.. non_writable_parent_str
-				.. "' should be non-writable for the test to be valid. Error: "
-				.. tostring(parent_writable_err)
+					.. non_writable_parent_str
+					.. "' should be non-writable for the test to be valid. Error: "
+					.. tostring(parent_writable_err)
 			)
 
 			local file_path_str = pl_path.join(non_writable_parent_str, "file_in_non_writable.txt")
@@ -262,7 +262,8 @@ describe("CreateFileOperation", function()
 			assert.is_false(pl_path.exists(file_path_str))
 		end)
 
-		it("should succeed tolerantly if the file does not exist at the time of undo (previously strict fail)",
+		it(
+			"should succeed tolerantly if the file does not exist at the time of undo (previously strict fail)",
 			function()
 				-- DECISION: Aligned with tolerant success policy.
 				local file_path_str = pl_path.join(tmp_dir, "undo_file_gone.txt")
@@ -279,7 +280,8 @@ describe("CreateFileOperation", function()
 				local undo_success, undo_err = op:undo()
 				assert.is_true(undo_success, "Undo should succeed tolerantly: " .. tostring(undo_err))
 				assert.match("already did not exist", undo_err, "Undo error message mismatch")
-			end)
+			end
+		)
 
 		it("should fail if the file's content (and thus checksum) has changed since creation", function()
 			local file_path_str = pl_path.join(tmp_dir, "undo_file_changed.txt")

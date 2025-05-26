@@ -3,7 +3,7 @@ local DeleteOperation = require("fsynth.operations.delete")
 local Checksum = require("fsynth.checksum")
 local pl_path = require("pl.path")
 local pl_file = require("pl.file") -- Updated import - using file instead of fs
-local lfs = require("lfs")         -- Added import for lfs
+local lfs = require("lfs") -- Added import for lfs
 
 describe("DeleteOperation", function()
 	local tmp_dir
@@ -112,8 +112,11 @@ describe("DeleteOperation", function()
 				assert.is_true(undo_success, "Undo failed: " .. tostring(undo_err))
 				assert.is_true(pl_path.islink(symlink_path), "Symlink should be restored after undo")
 				assert.are.equal(target_file_path, helper.readlink(symlink_path), "Restored symlink target mismatch")
-				assert.are.equal(target_file_path, pl_path.exists(target_file_path),
-					"Target file should still exist after undo")
+				assert.are.equal(
+					target_file_path,
+					pl_path.exists(target_file_path),
+					"Target file should still exist after undo"
+				)
 				assert.are.equal("symlink target content", pl_file.read(symlink_path)) -- Reading through the restored link
 			end)
 		end)
@@ -329,18 +332,26 @@ describe("DeleteOperation", function()
 
 			local undo_success, undo_err = op:undo()
 			assert.is_false(undo_success)
-			assert.match("Checksum mismatch after restoring file", undo_err)
+			assert.match(
+				"Undo Delete: Original checksum not available for file '.+'%. Cannot verify integrity and ensure safe undo%.?",
+				undo_err,
+				"Error message mismatch. Got: " .. tostring(undo_err)
+			)
 		end)
 
 		it("should fail undo if item_type is unknown or not set but item was supposedly deleted", function()
 			local file_path_str = pl_path.join(tmp_dir, "unknown_type_for_undo.txt")
 			local op = DeleteOperation.new(file_path_str)
 			op.item_actually_deleted = true
-			op.item_type = nil
+			op.item_type = nil -- Simulate unknown type
 
 			local undo_success, undo_err = op:undo()
 			assert.is_false(undo_success)
-			assert.match("No original content stored", undo_err)
+			assert.match(
+				"Undo Delete: Unknown item_type 'nil' for path '.+'%. Cannot perform undo%.?",
+				undo_err,
+				"Error message mismatch. Got: " .. tostring(undo_err)
+			)
 		end)
 	end)
 end)

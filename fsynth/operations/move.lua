@@ -23,13 +23,13 @@ function MoveOperation.new(source_path, target_path, options)
 	self.options.create_parent_dirs = self.options.create_parent_dirs or false
 	-- self.options.move_into_if_target_is_dir = true -- DECISION: This is now default behavior
 
-	self.was_directory = nil                -- Set in validate(): true if source is a directory
+	self.was_directory = nil -- Set in validate(): true if source is a directory
 	self.original_target_existed_and_was_overwritten = false
 	self.target_is_directory_move_into = false -- Set in validate(): true if source is file and target is existing dir
-	self.actual_target_path = nil           -- Set in execute(): final path where source was moved, esp. if moved into dir
+	self.actual_target_path = nil -- Set in execute(): final path where source was moved, esp. if moved into dir
 
-	self.source_is_symlink = false          -- Set in validate(): true if source itself is a symlink
-	self.source_symlink_target = nil        -- Set in validate(): the path the source symlink pointed to
+	self.source_is_symlink = false -- Set in validate(): true if source itself is a symlink
+	self.source_symlink_target = nil -- Set in validate(): the path the source symlink pointed to
 
 	self.checksum_data.initial_source_checksum = nil
 	self.checksum_data.final_target_checksum = nil
@@ -51,19 +51,21 @@ function MoveOperation:validate()
 	end
 
 	-- Source Validation
-	local source_attrs = lfs.attributes(self.source)
-	if not source_attrs then
-		return false, fmt("Source path '{}' does not exist or is inaccessible.", self.source)
-	end
+	local source_link_mode = lfs.symlinkattributes(self.source, "mode") -- Attempt to get mode of link itself
+	self.source_is_symlink = (source_link_mode == "link")
 
-	self.source_is_symlink = (source_attrs.mode == "link")
 	if self.source_is_symlink then
 		log.debug("Validate Move: Source '{}' is a symlink.", self.source)
 		local pcall_ok, link_target_str = pcall(lfs.symlinkattributes, self.source, "target")
-		if not pcall_ok or link_target_str == nil then -- Allow broken symlinks to be moved
-			log.warn(fmt("Could not read target of source symlink '{}' (possibly broken): {}. Will proceed with move.",
-				self.source, tostring(link_target_str or (pcall_ok and "nil") or "pcall error")))
-			self.source_symlink_target = nil -- Mark as nil if broken or unreadable
+		if not pcall_ok or link_target_str == nil then
+			log.warn(
+				fmt(
+					"Could not read target of source symlink '{}' (possibly broken): {}. Will proceed with move.",
+					self.source,
+					tostring(link_target_str or (pcall_ok and "nil") or "pcall error")
+				)
+			)
+			self.source_symlink_target = nil
 		else
 			self.source_symlink_target = link_target_str
 			log.debug("Validate Move: Source symlink '{}' points to '{}'.", self.source, self.source_symlink_target)
@@ -73,14 +75,23 @@ function MoveOperation:validate()
 		self.was_directory = pl_path.isdir(self.source) -- pl_path.isdir resolves the link
 		self.checksum_data.initial_source_checksum = nil -- No content checksum for symlink itself
 	else
+		-- Not a symlink (or lfs.symlinkattributes didn't say "link"), so use lfs.attributes for regular file/dir
+		local source_attrs = lfs.attributes(self.source)
+		if not source_attrs then
+			-- This implies source doesn't exist or is inaccessible if symlink check also failed to identify it.
+			return false, fmt("Source path '{}' does not exist or is inaccessible.", self.source)
+		end
 		self.was_directory = (source_attrs.mode == "directory")
 		if not self.was_directory then -- Source is a regular file
 			log.debug("Validate Move: Source '{}' is a file.", self.source)
 			local success, result = pcall(Checksum.calculate_sha256, self.source)
 			if not success or not result then
 				return false,
-					fmt("Failed to calculate initial checksum for source file '{}': {}", self.source,
-						tostring(result or "pcall error"))
+					fmt(
+						"Failed to calculate initial checksum for source file '{}': {}",
+						self.source,
+						tostring(result or "pcall error")
+					)
 			end
 			self.checksum_data.initial_source_checksum = result
 			log.debug("Validate Move: Initial checksum for source file '{}': {}", self.source, result)
@@ -102,14 +113,18 @@ function MoveOperation:validate()
 			-- This check will happen in execute() before the move.
 			log.debug(
 				"Validate: Source (file/symlink-to-file) '{}', target '{}' is directory. Will attempt to move into directory.",
-				self.source, self.target)
+				self.source,
+				self.target
+			)
 		elseif self.source_is_symlink and target_is_dir then
 			-- If source IS a symlink (regardless of what it points to) and target is an existing directory
 			-- this is also a move-into case for the symlink itself.
 			self.target_is_directory_move_into = true
 			log.debug(
 				"Validate Move: Source (symlink) '{}', target '{}' is directory. Will attempt to move symlink into directory.",
-				self.source, self.target)
+				self.source,
+				self.target
+			)
 		else
 			-- Standard overwrite logic
 			self.target_is_directory_move_into = false
@@ -125,13 +140,18 @@ function MoveOperation:validate()
 			-- This should be caught if target_is_directory_move_into is false, and types mismatch.
 			if not self.was_directory and target_is_dir and not self.target_is_directory_move_into then
 				return false,
-					fmt("Cannot move file-like source '{}' onto directory '{}' when not in move-into mode.", self.source,
-						self.target)
+					fmt(
+						"Cannot move file-like source '{}' onto directory '{}' when not in move-into mode.",
+						self.source,
+						self.target
+					)
 			end
-			log.debug("Validate Move: Target '{}' exists and overwrite is true. Type compatibility checked.", self
-				.target)
+			log.debug(
+				"Validate Move: Target '{}' exists and overwrite is true. Type compatibility checked.",
+				self.target
+			)
 		end
-	else                                     -- Target does not exist
+	else -- Target does not exist
 		self.target_is_directory_move_into = false -- Can't move into a non-existent directory
 		if not self.options.create_parent_dirs then
 			local parent_dir = pl_path.dirname(self.target)
@@ -140,21 +160,33 @@ function MoveOperation:validate()
 					return false, fmt("Cannot create target '{}', parent '{}' is a file.", self.target, parent_dir)
 				end
 				return false,
-					fmt("Parent directory '{}' for target '{}' does not exist and create_parent_dirs is false.",
-						parent_dir, self.target)
+					fmt(
+						"Parent directory '{}' for target '{}' does not exist and create_parent_dirs is false.",
+						parent_dir,
+						self.target
+					)
 			end
 		end
 	end
 
 	log.debug(
 		"Validate Move: Validation successful for '%s' -> '%s'. source_is_symlink: %s, target_is_directory_move_into: %s",
-		self.source, self.target, tostring(self.source_is_symlink), tostring(self.target_is_directory_move_into))
+		self.source,
+		self.target,
+		tostring(self.source_is_symlink),
+		tostring(self.target_is_directory_move_into)
+	)
 	return true
 end
 
 function MoveOperation:execute()
-	log.info("Execute Move: '%s' -> '%s' (Overwrite: %s, CreateParents: %s)", self.source, self.target,
-		tostring(self.options.overwrite), tostring(self.options.create_parent_dirs))
+	log.info(
+		"Execute Move: '%s' -> '%s' (Overwrite: %s, CreateParents: %s)",
+		self.source,
+		self.target,
+		tostring(self.options.overwrite),
+		tostring(self.options.create_parent_dirs)
+	)
 	-- Ensure validation has been run or run it now
 	if self.was_directory == nil or (pl_path.exists(self.target) and self.target_is_directory_move_into == nil) then -- Re-validate if critical flags aren't set
 		log.debug("Execute Move: Critical validation flags not set, re-validating.")
@@ -202,7 +234,8 @@ function MoveOperation:execute()
 			local err = fmt(
 				"Cannot move file '%s' onto existing directory '%s' without explicit move-into logic handled.",
 				self.source,
-				self.actual_target_path)
+				self.actual_target_path
+			)
 			log.error(err)
 			return false, err
 		end
@@ -222,8 +255,8 @@ function MoveOperation:execute()
 		local parent_dir = pl_path.dirname(self.actual_target_path)
 		if parent_dir and parent_dir ~= "" and parent_dir ~= "." and not pl_path.isdir(parent_dir) then
 			if pl_path.isfile(parent_dir) then
-				local err = fmt("Cannot create parent for target '{}', '{}' is a file.", self.actual_target_path,
-					parent_dir)
+				local err =
+					fmt("Cannot create parent for target '{}', '{}' is a file.", self.actual_target_path, parent_dir)
 				log.error(err)
 				return false, err
 			end
@@ -231,8 +264,11 @@ function MoveOperation:execute()
 			local parent_create_ok, parent_create_err
 			pcall_success, parent_create_ok, parent_create_err = pcall(pl_dir.makepath, parent_dir)
 			if not pcall_success or not parent_create_ok then
-				local err = fmt("Failed to create parent directories for '{}': {}", self.actual_target_path,
-					tostring(parent_create_err or parent_create_ok or "pcall error"))
+				local err = fmt(
+					"Failed to create parent directories for '{}': {}",
+					self.actual_target_path,
+					tostring(parent_create_err or parent_create_ok or "pcall error")
+				)
 				log.error(err)
 				return false, err
 			end
@@ -246,14 +282,22 @@ function MoveOperation:execute()
 	pcall_success, move_success, move_err_msg = pcall(pl_file.move, self.source, self.actual_target_path)
 
 	if not pcall_success then
-		local err = fmt("Failed to move '{}' to '{}' (pcall error): {}", self.source, self.actual_target_path,
-			tostring(move_success)) -- move_success is error msg here
+		local err = fmt(
+			"Failed to move '{}' to '{}' (pcall error): {}",
+			self.source,
+			self.actual_target_path,
+			tostring(move_success)
+		) -- move_success is error msg here
 		log.error(err)
 		return false, err
 	end
 	if not move_success then
-		local err = fmt("Failed to move '{}' to '{}': {}", self.source, self.actual_target_path,
-			move_err_msg or "unknown Penlight error")
+		local err = fmt(
+			"Failed to move '{}' to '{}': {}",
+			self.source,
+			self.actual_target_path,
+			move_err_msg or "unknown Penlight error"
+		)
 		log.error(err)
 		return false, err
 	end
@@ -265,19 +309,30 @@ function MoveOperation:execute()
 		local cs_success, cs_result_or_err = pcall(Checksum.calculate_sha256, self.actual_target_path)
 
 		if not cs_success or not cs_result_or_err then
-			log.warn(fmt(
-				"Checksum calculation failed for '%s' after move: {}. Operation succeeded but checksum not verified.",
-				self.actual_target_path, tostring(cs_result_or_err or cs_success)))
+			log.warn(
+				fmt(
+					"Checksum calculation failed for '%s' after move: {}. Operation succeeded but checksum not verified.",
+					self.actual_target_path,
+					tostring(cs_result_or_err or cs_success)
+				)
+			)
 			self.checksum_data.final_target_checksum = nil
 		else
 			self.checksum_data.final_target_checksum = cs_result_or_err
-			log.info("Execute Move: Final target checksum for '%s': %s", self.actual_target_path,
-				self.checksum_data.final_target_checksum)
+			log.info(
+				"Execute Move: Final target checksum for '%s': %s",
+				self.actual_target_path,
+				self.checksum_data.final_target_checksum
+			)
 			if self.checksum_data.initial_source_checksum ~= self.checksum_data.final_target_checksum then
-				log.warn(fmt(
-					"Checksum mismatch after move for '%s'. Initial: %s, Final: %s. File may have been corrupted or changed during move.",
-					self.actual_target_path, self.checksum_data.initial_source_checksum,
-					self.checksum_data.final_target_checksum))
+				log.warn(
+					fmt(
+						"Checksum mismatch after move for '%s'. Initial: %s, Final: %s. File may have been corrupted or changed during move.",
+						self.actual_target_path,
+						self.checksum_data.initial_source_checksum,
+						self.checksum_data.final_target_checksum
+					)
+				)
 			end
 		end
 	elseif self.source_is_symlink then
@@ -289,8 +344,11 @@ function MoveOperation:execute()
 end
 
 function MoveOperation:undo()
-	log.info("Undo Move: Attempting for '%s' (original source) from '%s' (actual target)", self.source,
-		self.actual_target_path or self.target)
+	log.info(
+		"Undo Move: Attempting for '%s' (original source) from '%s' (actual target)",
+		self.source,
+		self.actual_target_path or self.target
+	)
 	local current_location = self.actual_target_path or self.target
 
 	if not pl_path.exists(current_location) then
@@ -308,8 +366,10 @@ function MoveOperation:undo()
 
 	-- If original target was overwritten, this undo does NOT restore it. It just moves the source back.
 	if self.original_target_existed_and_was_overwritten then
-		log.warn("Undo Move: Original item at target '%s' was overwritten and will not be restored by this undo.",
-			self.target)
+		log.warn(
+			"Undo Move: Original item at target '%s' was overwritten and will not be restored by this undo.",
+			self.target
+		)
 	end
 
 	-- Create parent directories for the original source path if they were created during execute for target and might be missing now
@@ -317,20 +377,32 @@ function MoveOperation:undo()
 	-- For simplicity, we can try to ensure parent of self.source exists if create_parent_dirs was true.
 	if self.options.create_parent_dirs then -- Check if original operation might have needed parent creation for target
 		local source_parent_dir = pl_path.dirname(self.source)
-		if source_parent_dir and source_parent_dir ~= "" and source_parent_dir ~= "." and not pl_path.isdir(source_parent_dir) then
+		if
+			source_parent_dir
+			and source_parent_dir ~= ""
+			and source_parent_dir ~= "."
+			and not pl_path.isdir(source_parent_dir)
+		then
 			if pl_path.isfile(source_parent_dir) then
-				local err = fmt("Cannot create parent for undo to source '{}', '{}' is a file.", self.source,
-					source_parent_dir)
+				local err =
+					fmt("Cannot create parent for undo to source '{}', '{}' is a file.", self.source, source_parent_dir)
 				log.error(err)
 				return false, err
 			end
-			log.debug("Undo Move: Attempting to create parent directory '%s' for original source path '%s'",
-				source_parent_dir, self.source)
+			log.debug(
+				"Undo Move: Attempting to create parent directory '%s' for original source path '%s'",
+				source_parent_dir,
+				self.source
+			)
 			local parent_create_ok, parent_create_err = pcall(pl_dir.makepath, source_parent_dir)
 			if not parent_create_ok then
-				log.warn(fmt(
-					"Undo Move: Failed to create parent directory '%s' for original source. Error: %s. Continuing undo attempt.",
-					source_parent_dir, tostring(parent_create_err)))
+				log.warn(
+					fmt(
+						"Undo Move: Failed to create parent directory '%s' for original source. Error: %s. Continuing undo attempt.",
+						source_parent_dir,
+						tostring(parent_create_err)
+					)
+				)
 				-- Not returning false, as pl_file.move might still succeed or provide a better error.
 			end
 		end
@@ -341,14 +413,22 @@ function MoveOperation:undo()
 	local move_back_pcall_ok, move_back_success, move_back_err_msg = pcall(pl_file.move, current_location, self.source)
 
 	if not move_back_pcall_ok then
-		local err = fmt("Failed to move '%s' back to '%s' during undo (pcall error): {}", current_location, self.source,
-			tostring(move_back_success)) -- move_back_success is error here
+		local err = fmt(
+			"Failed to move '%s' back to '%s' during undo (pcall error): {}",
+			current_location,
+			self.source,
+			tostring(move_back_success)
+		) -- move_back_success is error here
 		log.error(err)
 		return false, err
 	end
 	if not move_back_success then
-		local err = fmt("Failed to move '%s' back to '%s' during undo: {}", current_location, self.source,
-			move_back_err_msg or "unknown Penlight error")
+		local err = fmt(
+			"Failed to move '%s' back to '%s' during undo: {}",
+			current_location,
+			self.source,
+			move_back_err_msg or "unknown Penlight error"
+		)
 		log.error(err)
 		return false, err
 	end
@@ -359,13 +439,22 @@ function MoveOperation:undo()
 		log.debug("Undo Move: Verifying checksum for restored source file: %s", self.source)
 		local restored_cs_ok, restored_cs = pcall(Checksum.calculate_sha256, self.source)
 		if not restored_cs_ok or not restored_cs then
-			log.warn(fmt(
-				"Checksum calculation failed for '%s' after undo move: {}. Undo completed but checksum not verified.",
-				self.source, tostring(restored_cs or restored_cs_ok)))
+			log.warn(
+				fmt(
+					"Checksum calculation failed for '%s' after undo move: {}. Undo completed but checksum not verified.",
+					self.source,
+					tostring(restored_cs or restored_cs_ok)
+				)
+			)
 		elseif restored_cs ~= self.checksum_data.initial_source_checksum then
-			log.warn(fmt(
-				"Checksum mismatch for '%s' after undo move. Expected: %s, Got: %s. File may have been corrupted.",
-				self.source, self.checksum_data.initial_source_checksum, restored_cs))
+			log.warn(
+				fmt(
+					"Checksum mismatch for '%s' after undo move. Expected: %s, Got: %s. File may have been corrupted.",
+					self.source,
+					self.checksum_data.initial_source_checksum,
+					restored_cs
+				)
+			)
 		else
 			log.info("Undo Move: Checksum verified for restored source file '%s'", self.source)
 		end
@@ -375,19 +464,34 @@ function MoveOperation:undo()
 			local pcall_ok, current_link_target = pcall(lfs.symlinkattributes, self.source, "target")
 			if pcall_ok and current_link_target then
 				if current_link_target ~= self.source_symlink_target then
-					log.warn(fmt("Undo Move: Restored symlink '%s' target '%s' does not match original target '%s'.",
-						self.source, current_link_target, self.source_symlink_target))
+					log.warn(
+						fmt(
+							"Undo Move: Restored symlink '%s' target '%s' does not match original target '%s'.",
+							self.source,
+							current_link_target,
+							self.source_symlink_target
+						)
+					)
 				else
-					log.info("Undo Move: Restored symlink '%s' target '%s' matches original.", self.source,
-						current_link_target)
+					log.info(
+						"Undo Move: Restored symlink '%s' target '%s' matches original.",
+						self.source,
+						current_link_target
+					)
 				end
 			else
-				log.warn(fmt("Undo Move: Could not read target of restored symlink '%s' to verify. Error: %s",
-					self.source, tostring(current_link_target or (pcall_ok and "nil") or "pcall error")))
+				log.warn(
+					fmt(
+						"Undo Move: Could not read target of restored symlink '%s' to verify. Error: %s",
+						self.source,
+						tostring(current_link_target or (pcall_ok and "nil") or "pcall error")
+					)
+				)
 			end
 		else
 			log.debug(
-				"Undo Move: No original symlink target recorded (e.g. source was broken link), skipping target verification.")
+				"Undo Move: No original symlink target recorded (e.g. source was broken link), skipping target verification."
+			)
 		end
 	end
 
