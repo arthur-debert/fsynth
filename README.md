@@ -27,7 +27,7 @@ At any level of cuncurrency, you wil have unpredictable and even data loss.
 
 While the code base pays good effort on ensuring it works safely, the
 interaction with other systems changing is not a tractable problem under this
-design.
+design. See [docs/correctness-decisions.md](docs/correctness-decisions.md).
 
 ### Real-World Example: Dotfiles Deployment
 
@@ -227,11 +227,10 @@ end
 
 ## Documentation
 
-- 📖 [In-Depth Guide](docs/guide/in-depth.md) - Execution models, error
-  handling, advanced features
 - 🚀 [Usage Examples](docs/usage_examples.lua) - More code examples
-- 📋 [API Reference](docs/design/api.md) - Complete API documentation
-- 🔧 [Development Guide](docs/development.md) - Contributing and development
+- 📋 [API Reference](docs/api.md) - Complete API documentation
+- 🔧 [Development Guide](docs/development/development.txt) - Contributing and
+  development
 
 ## Why Use Fsynth?
 
