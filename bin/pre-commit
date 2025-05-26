@@ -52,9 +52,8 @@ main() {
 
     # Run tests
     echo "Running tests..."
-    SCRIPT_DIR=$(dirname "$0")
     # shellcheck disable=SC1091
-    source "${SCRIPT_DIR}/../.envrc"
+    source "${PROJECT_ROOT}/.envrc"
     if ! busted; then
         echo "❌ Tests failed. Commit aborted."
         exit 1

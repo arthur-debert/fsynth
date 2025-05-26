@@ -47,7 +47,8 @@ Options:
 - `overwrite` (boolean, default false) - Allow overwriting existing target
 - `on_checksum_mismatch` (string, default "error") - Action on checksum failure:
   "error" or "warn"
-- `preserve_attributes` (boolean, default true) - Preserve file attributes
+- `preserve_attributes` (boolean, default true) - Preserve file attributes (e.g., timestamps, mode).
+- `mode` (string/number, optional) - Permissions to set on the target file *after* copying. If set, this overrides any permissions that might have been preserved from the source or system defaults.
 
 #### Create Directory
 
@@ -58,7 +59,7 @@ fsynth.op.create_directory(dir_path, options)
 Options:
 
 - `create_parents` (boolean, default true) - Create parent directories if needed
-- `mode` (string/number, optional) - Permissions for the new directory
+- `mode` (string/number, optional) - Permissions for the new directory (e.g., "755"). If not set, system defaults apply.
 
 #### Create File
 
@@ -68,9 +69,9 @@ fsynth.op.create_file(file_path, content, options)
 
 Options:
 
-- `mode` (string/number, optional) - Permissions for the new file
+- `mode` (string/number, optional) - Permissions for the new file (e.g., "644"). If not set, system defaults apply.
 - `encoding` (string, default "utf-8") - File encoding
-- `overwrite` (boolean, default false) - Allow overwriting existing file
+- `overwrite` (boolean, default false) - Allow overwriting existing file (Note: `create_file` is typically exclusive; this option might be more relevant for a future `write_file` operation or if `create_file` behavior changes).
 
 #### Symlink
 
@@ -202,6 +203,8 @@ with sensible defaults.
 
 Operations include safety features like checksum verification, item count limits
 for directory operations, and optional backups before destructive operations.
+Additionally, operations now perform upfront checks for source readability and
+target writability based on file/directory permissions.
 
 ### 5. Testability
 

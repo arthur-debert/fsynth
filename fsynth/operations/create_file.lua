@@ -6,6 +6,7 @@ local pl_path = require("pl.path")
 local pl_file = require("pl.file")
 local pl_dir = require("pl.dir")
 local fmt = require("string.format.all")
+local file_permissions = require("fsynth.file_permissions")
 -- os.remove is a standard Lua function
 
 ---------------------------------------------------------------------
@@ -21,6 +22,11 @@ function CreateFileOperation.new(target_path, options)
 	setmetatable(self, CreateFileOperation) -- Set metatable to CreateFileOperation
 	self.options.content = self.options.content or "" -- Default content is empty string
 	self.options.create_parent_dirs = self.options.create_parent_dirs or false
+
+	-- File permissions mode to set after creation (e.g., "644", "755" on Unix-like systems;
+	-- "444" for read-only, "666" for writable on Windows via this library's interpretation).
+	-- If nil, system default permissions are used.
+	self.options.mode = self.options.mode
 	self.checksum_data.target_checksum = nil -- Specific to CreateFile, not in base Operation new()
 	return self
 end
@@ -54,6 +60,31 @@ end
 function CreateFileOperation:execute()
 	log.info("Executing CreateFileOperation for target: %s", self.target)
 	local ok, err_msg
+
+	local parent_dir_path = pl_path.dirname(self.target)
+	if parent_dir_path == "" or parent_dir_path == "." then -- Current directory
+		parent_dir_path = "."
+	end
+
+	-- Check if parent directory is writable before attempting to create the file
+	if pl_path.exists(parent_dir_path) and pl_path.isdir(parent_dir_path) then
+		local writable, write_err = file_permissions.is_writable(parent_dir_path)
+		if not writable then
+			err_msg = fmt(
+				"Parent directory '{}' is not writable. Error: {}",
+				parent_dir_path,
+				write_err or "permission denied"
+			)
+			log.error(err_msg)
+			return false, err_msg
+		end
+	elseif not self.options.create_parent_dirs then
+		-- Parent doesn't exist and we are not allowed to create it
+		err_msg = fmt("Parent directory '{}' does not exist and create_parent_dirs is false", parent_dir_path)
+		log.error(err_msg)
+		return false, err_msg
+	end
+	-- If parent_dir_path does not exist but create_parent_dirs is true, makepath will handle it later.
 
 	-- Check if target is an existing directory
 	if pl_path.isdir(self.target) then
@@ -114,6 +145,17 @@ function CreateFileOperation:execute()
 	self.checksum_data.target_checksum = new_checksum
 	log.info("Target checksum stored: %s", self.checksum_data.target_checksum)
 
+	-- Apply specified permissions if provided
+	if self.options.mode then
+		log.debug("Setting permissions on created file to: %s", self.options.mode)
+		local perm_ok, perm_err = file_permissions.set_mode(self.target, self.options.mode)
+		if not perm_ok then
+			log.warn("Failed to set permissions on created file: %s", perm_err)
+			-- We don't fail the operation if setting permissions fails
+			-- Just log a warning
+		end
+	end
+
 	return true
 end
 
@@ -122,10 +164,9 @@ function CreateFileOperation:undo()
 	local ok, err_msg
 
 	if not pl_path.exists(self.target) then
-		-- If the file doesn't exist, return false with error
-		err_msg = fmt("File '{}' does not exist", self.target)
-		log.error(err_msg)
-		return false, err_msg
+		-- Tolerant success: If the file doesn't exist, consider undo successful.
+		log.info("Undo: File '%s' does not exist, considering undo successful (tolerant).", self.target)
+		return true, fmt("Undo: File '{}' already did not exist.", self.target)
 	end
 
 	if not self.checksum_data.target_checksum then

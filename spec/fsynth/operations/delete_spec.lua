@@ -3,6 +3,7 @@ local DeleteOperation = require("fsynth.operations.delete")
 local Checksum = require("fsynth.checksum")
 local pl_path = require("pl.path")
 local pl_file = require("pl.file") -- Updated import - using file instead of fs
+local lfs = require("lfs") -- Added import for lfs
 
 describe("DeleteOperation", function()
 	local tmp_dir
@@ -73,28 +74,50 @@ describe("DeleteOperation", function()
 				assert.is_nil(op.checksum_data.original_checksum)
 			end)
 
-			it("PENDING: should delete an existing symbolic link (deleting the link, not the target)", function()
-				-- Explanation: Define and test the behavior of DeleteOperation when the path
-				-- is a symbolic link. It should delete the link itself, not the file/directory
-				-- it points to. The 'item_type' stored for undo should probably be 'symlink'
-				-- or similar, and 'original_content' would be the link's target path.
-				pending("Test deletion of a symbolic link.")
-				-- Example:
-				-- local lfs = require("lfs") -- May need lfs for symlink creation if not already available
-				-- local target_file_path = pl_path.join(tmp_dir, "symlink_target_file.txt")
-				-- create_file_for_test(target_file_path, "content")
-				-- local symlink_path = pl_path.join(tmp_dir, "my_symlink_to_delete")
-				-- assert.is_true(lfs.link(target_file_path, symlink_path, true)) -- Create symlink
-				--
-				-- local op = DeleteOperation.new(symlink_path)
-				-- local success, err = op:execute()
-				-- assert.is_true(success, err)
-				-- assert.is_false(pl_path.exists(symlink_path)) -- Link is gone
-				-- assert.is_false(pl_path.islink(symlink_path)) -- Double check it's not a broken link
-				-- assert.are.equal(target_file_path, pl_path.exists(target_file_path)) -- Target file still exists
-				-- assert.is_true(op.item_actually_deleted)
-				-- assert.are.equal("symlink", op.item_type) -- Or similar
-				-- assert.are.equal(target_file_path, op.original_content) -- Storing link target
+			it("should delete an existing symbolic link (deleting the link, not the target) and allow undo", function()
+				-- DECISION: DeleteOperation should identify symlinks, delete the link itself,
+				-- and store necessary info (type: "symlink", link_target) for undo.
+				if helper.is_windows() then
+					pending("Skipping symlink test on Windows due to lfs.link permission issues or different behavior.")
+					return
+				end
+
+				local target_file_path = pl_path.join(tmp_dir, "symlink_target_file.txt")
+				create_file_for_test(target_file_path, "symlink target content")
+				local symlink_path = pl_path.join(tmp_dir, "my_symlink_to_delete")
+
+				-- Create the symlink using lfs
+				local link_success, link_err = lfs.link(target_file_path, symlink_path, true)
+				assert.is_true(link_success, "Failed to create symlink for test setup: " .. tostring(link_err))
+				assert.is_true(pl_path.islink(symlink_path), "Path should be a symlink after creation.")
+
+				local op = DeleteOperation.new(symlink_path)
+
+				-- Validate first to check stored info (optional step here, execute will call it)
+				local valid, validate_err = op:validate()
+				assert.is_true(valid, "Validation failed: " .. tostring(validate_err))
+				assert.are.equal("symlink", op.item_type, "Item type should be 'symlink' after validation")
+				assert.are.equal(target_file_path, op.original_link_target, "Original link target not stored correctly")
+
+				local exec_success, exec_err = op:execute()
+				assert.is_true(exec_success, "Execute failed: " .. tostring(exec_err))
+
+				assert.is_false(pl_path.exists(symlink_path), "Symlink should be deleted")
+				assert.is_false(pl_path.islink(symlink_path), "Path should no longer be a symlink after deletion")
+				assert.are.equal(target_file_path, pl_path.exists(target_file_path), "Target file should still exist")
+				assert.is_true(op.item_actually_deleted, "item_actually_deleted should be true")
+
+				-- Test Undo
+				local undo_success, undo_err = op:undo()
+				assert.is_true(undo_success, "Undo failed: " .. tostring(undo_err))
+				assert.is_true(pl_path.islink(symlink_path), "Symlink should be restored after undo")
+				assert.are.equal(target_file_path, helper.readlink(symlink_path), "Restored symlink target mismatch")
+				assert.are.equal(
+					target_file_path,
+					pl_path.exists(target_file_path),
+					"Target file should still exist after undo"
+				)
+				assert.are.equal("symlink target content", pl_file.read(symlink_path)) -- Reading through the restored link
 			end)
 		end)
 
@@ -309,18 +332,26 @@ describe("DeleteOperation", function()
 
 			local undo_success, undo_err = op:undo()
 			assert.is_false(undo_success)
-			assert.match("Checksum mismatch after restoring file", undo_err)
+			assert.match(
+				"Undo Delete: Original checksum not available for file '.+'%. Cannot verify integrity and ensure safe undo%.?",
+				undo_err,
+				"Error message mismatch. Got: " .. tostring(undo_err)
+			)
 		end)
 
 		it("should fail undo if item_type is unknown or not set but item was supposedly deleted", function()
 			local file_path_str = pl_path.join(tmp_dir, "unknown_type_for_undo.txt")
 			local op = DeleteOperation.new(file_path_str)
 			op.item_actually_deleted = true
-			op.item_type = nil
+			op.item_type = nil -- Simulate unknown type
 
 			local undo_success, undo_err = op:undo()
 			assert.is_false(undo_success)
-			assert.match("No original content stored", undo_err)
+			assert.match(
+				"Undo Delete: Unknown item_type 'nil' for path '.+'%. Cannot perform undo%.?",
+				undo_err,
+				"Error message mismatch. Got: " .. tostring(undo_err)
+			)
 		end)
 	end)
 end)

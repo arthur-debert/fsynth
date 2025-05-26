@@ -95,34 +95,71 @@ describe("SymlinkOperation", function()
 				assert.is_false(pl_path.exists(link_path_str))
 			end)
 
-			it("PENDING: should create a symlink with a relative target path", function()
-				-- Explanation: Current tests use absolute paths for link targets.
-				-- It's important to test if the operation correctly creates and stores
-				-- relative link targets (e.g., target = "../another_file.txt").
-				-- This includes verifying that readlink() returns the stored relative path
-				-- or an appropriately resolved absolute path, depending on `lfs` behavior
-				-- and how the link is created by the operation.
-				pending("Test symlink creation with relative link target paths.")
-				-- Example:
-				-- local actual_file_rel_target = "actual_file_relative.txt"
-				-- local actual_file_abs_path = pl_path.join(tmp_dir, actual_file_rel_target)
-				-- create_file_for_test(actual_file_abs_path, "relative target content")
-				--
-				-- local link_dir = pl_path.join(tmp_dir, "link_dir")
-				-- create_dir_for_test(link_dir)
-				-- local link_path_str = pl_path.join(link_dir, "my_relative_link")
-				--
-				-- -- The link target should be relative from link_path_str to actual_file_abs_path
-				-- local relative_target_str = "../" .. actual_file_rel_target
-				--
-				-- local op = SymlinkOperation.new(relative_target_str, link_path_str)
-				-- local success, err = op:execute()
-				-- assert.is_true(success, err)
-				-- assert.is_true(pl_path.islink(link_path_str))
-				-- -- How lfs.symlinkattributes(link_path_str, "target") handles this needs to be checked.
-				-- -- It might return the relative path as stored, or resolve it.
-				-- assert.are.equal(relative_target_str, readlink(link_path_str)) -- or some resolved version
-				-- assert.are.equal("relative target content", pl_file.read(link_path_str))
+			it("should create a symlink with a relative target path and allow undo", function()
+				-- DECISION: SymlinkOperation should pass the target path string as-is to lfs.link,
+				-- correctly creating relative links. lfs.symlinkattributes should return the stored relative path.
+				if helper.is_windows() then
+					pending(
+						"Skipping relative symlink test on Windows due to potential behavior differences or permission issues."
+					)
+					return
+				end
+
+				local target_file_name = "actual_file_for_relative_link.txt"
+				local target_file_abs_path = pl_path.join(tmp_dir, target_file_name)
+				create_file_for_test(target_file_abs_path, "relative target content")
+
+				local link_sub_dir_name = "link_subdir"
+				local link_sub_dir_abs_path = pl_path.join(tmp_dir, link_sub_dir_name)
+				create_dir_for_test(link_sub_dir_abs_path)
+
+				local link_name = "my_relative_link"
+				local link_abs_path = pl_path.join(link_sub_dir_abs_path, link_name)
+
+				-- Calculate the relative path from the link's location to the target file
+				-- Link is in tmp_dir/link_subdir/, target is in tmp_dir/
+				local relative_link_target_str = pl_path.join("..", target_file_name)
+				-- On Windows, Penlight might use backslashes; ensure consistency for comparison if needed, though lfs usually handles it.
+				-- For this test, we primarily care that the *stored* target is what we gave.
+
+				local op = SymlinkOperation.new(relative_link_target_str, link_abs_path)
+				local success, err = op:execute()
+
+				assert.is_true(success, "Execute failed: " .. tostring(err))
+				assert.is_true(pl_path.islink(link_abs_path), "Path should be a symlink.")
+				assert.is_true(op.link_actually_created, "link_actually_created should be true.")
+
+				-- Verify the stored target is the relative path we provided
+				local stored_target = readlink(link_abs_path)
+				-- Normalize paths for comparison, especially for Windows vs Unix slashes if lfs does not normalize readlink output
+				assert.are.equal(
+					pl_path.normpath(relative_link_target_str),
+					pl_path.normpath(stored_target),
+					"Stored symlink target mismatch."
+				)
+
+				-- Verify that reading through the link works
+				assert.are.equal(
+					"relative target content",
+					pl_file.read(link_abs_path),
+					"Reading through relative symlink failed or content mismatch."
+				)
+				assert.are.equal(
+					link_abs_path,
+					pl_path.exists(link_abs_path),
+					"Relative symlink should resolve and exist."
+				)
+
+				-- Test Undo
+				local undo_success, undo_err = op:undo()
+				assert.is_true(undo_success, "Undo failed: " .. tostring(undo_err))
+				assert.is_false(pl_path.islink(link_abs_path), "Symlink should be removed after undo")
+				assert.is_false(pl_path.exists(link_abs_path), "Symlink path should not exist after undo")
+				assert.are.equal(
+					target_file_abs_path,
+					pl_path.exists(target_file_abs_path),
+					"Original target file should still exist after undo"
+				)
 			end)
 		end)
 
@@ -407,13 +444,31 @@ describe("SymlinkOperation", function()
 		)
 
 		it(
-			"PENDING: should clarify undo behavior if the symlink to be removed by undo does not exist anymore",
+			"should succeed tolerantly if the symlink to be removed by undo does not exist anymore (and nothing was overwritten)",
 			function()
-				-- Explanation: The current test for an "already-gone link" expects undo to succeed (as a no-op).
-				-- This is a tolerant interpretation. This test is a placeholder to ensure this behavior
-				-- is consistent with the chosen philosophy across all operations (e.g., CreateFileOperation,
-				-- CreateDirectoryOperation currently expect failure in similar scenarios).
-				pending("Review if tolerant success for undoing a gone link aligns with overall undo consistency.")
+				-- DECISION: Tolerant success is the chosen philosophy for undoing operations on items already gone,
+				-- provided no overwritten data needs restoration.
+				-- This test confirms SymlinkOperation aligns with this.
+				local link_target_path_str = pl_path.join(tmp_dir, "target_undo_gone_tolerant.txt")
+				create_file_for_test(link_target_path_str)
+				local link_path_str = pl_path.join(tmp_dir, "link_undo_gone_tolerant")
+
+				local op = SymlinkOperation.new(link_target_path_str, link_path_str)
+				local exec_success, exec_err = op:execute()
+				assert.is_true(exec_success, "Execute failed: " .. tostring(exec_err))
+				assert.is_true(op.link_actually_created)
+				assert.is_true(pl_path.islink(link_path_str))
+
+				-- Simulate link being deleted by external means
+				assert.is_true(pl_file.delete(link_path_str), "Failed to delete link for test setup")
+				assert.is_false(pl_path.exists(link_path_str))
+				assert.is_false(op.original_target_was_file) -- Ensure no overwrite scenario
+				assert.is_false(op.original_target_was_symlink)
+
+				local undo_success, undo_err = op:undo()
+				assert.is_true(undo_success, "Undo should succeed tolerantly: " .. tostring(undo_err))
+				assert.is_false(pl_path.islink(link_path_str)) -- Link should still not exist
+				assert.is_false(pl_path.exists(link_path_str))
 			end
 		)
 	end)

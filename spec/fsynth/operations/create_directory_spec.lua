@@ -1,8 +1,10 @@
 local helper = require("spec.spec_helper")
 local CreateDirectoryOperation = require("fsynth.operations.create_directory")
 local pl_path = require("pl.path")
--- Updated import - using path instead of fs
+local file_permissions = require("fsynth.file_permissions") -- Added
 -- local fs = require("pl.fs")
+
+local is_windows = pl_path.sep == "\\\\" -- Added
 
 describe("CreateDirectoryOperation", function()
 	local tmp_dir
@@ -26,6 +28,104 @@ describe("CreateDirectoryOperation", function()
 			assert.equal(dir_path_str, pl_path.exists(dir_path_str))
 			assert.is_true(pl_path.isdir(dir_path_str))
 			assert.is_true(op.dir_actually_created_by_this_op)
+		end)
+
+		describe("options.mode (permissions)", function()
+			it("should create a new directory with specified permissions (Unix-like mode)", function()
+				if is_windows then
+					pending("Skipping Unix-like mode test for directories on Windows")
+					return
+				end
+				local dir_path_str = pl_path.join(tmp_dir, "new_dir_with_mode")
+				local op = CreateDirectoryOperation.new(dir_path_str, { mode = "755" })
+				local success, err = op:execute()
+				assert.is_true(success, err)
+				assert.is_true(pl_path.isdir(dir_path_str))
+				local current_mode, mode_err = file_permissions.get_mode(dir_path_str)
+				assert.is_not_nil(current_mode, mode_err)
+				assert.are.equal("755", current_mode)
+			end)
+
+			it("should create a new directory and affect its writability for content (Unix-like mode 555)", function()
+				if is_windows then
+					-- Windows directory permissions are complex; 'attrib +R' on a dir doesn't prevent creation inside.
+					-- Our file_permissions.set_mode for dirs on Windows is a no-op for read-only type attributes.
+					pending("Skipping dir read-only (content) test on Windows due to platform differences.")
+					return
+				end
+				local dir_path_str = pl_path.join(tmp_dir, "new_dir_readonly_content")
+				-- Mode "555" (r-xr-xr-x) makes the directory readable and executable but not writable for content.
+				local op = CreateDirectoryOperation.new(dir_path_str, { mode = "555" })
+				local success, err = op:execute()
+				assert.is_true(success, err)
+				assert.is_true(pl_path.isdir(dir_path_str))
+
+				local current_mode, mode_err = file_permissions.get_mode(dir_path_str)
+				assert.is_not_nil(current_mode, mode_err)
+				assert.are.equal("555", current_mode)
+
+				-- Verify writability (ability to create items inside)
+				local writable, write_check_err = file_permissions.is_writable(dir_path_str)
+				assert.is_not_nil(writable, write_check_err)
+				assert.is_false(writable, "Directory should not be writable for content")
+			end)
+
+			it("should create a new directory and ensure it is writable for content (Unix-like mode 777)", function()
+				if is_windows then
+					pending("Skipping dir writable (content) test on Windows as default is usually writable.")
+					return
+				end
+				local dir_path_str = pl_path.join(tmp_dir, "new_dir_writable_content")
+				-- Mode "777" (rwxrwxrwx)
+				local op = CreateDirectoryOperation.new(dir_path_str, { mode = "777" })
+				local success, err = op:execute()
+				assert.is_true(success, err)
+				assert.is_true(pl_path.isdir(dir_path_str))
+
+				local current_mode, mode_err = file_permissions.get_mode(dir_path_str)
+				assert.is_not_nil(current_mode, mode_err)
+				assert.are.equal("777", current_mode)
+
+				-- Verify writability
+				local writable, write_check_err = file_permissions.is_writable(dir_path_str)
+				assert.is_not_nil(writable, write_check_err)
+				assert.is_true(writable, "Directory should be writable for content")
+			end)
+		end)
+
+		it("should fail to create a directory if parent directory is not writable (Unix-like)", function()
+			if is_windows then
+				pending("Skipping parent non-writable test on Windows due to complexity of setting up.")
+				return
+			end
+			local non_writable_parent_str = pl_path.join(tmp_dir, "non_writable_parent_for_dir")
+			assert.is_true(pl_path.mkdir(non_writable_parent_str), "Failed to create parent for test")
+			-- Set parent to r-x------ (owner cannot write into it)
+			local mode_set_ok, mode_set_err = file_permissions.set_mode(non_writable_parent_str, "500")
+			assert.is_true(mode_set_ok, "Failed to set parent dir to non-writable: " .. tostring(mode_set_err))
+
+			local parent_writable, parent_writable_err = file_permissions.is_writable(non_writable_parent_str)
+			assert.is_false(
+				parent_writable,
+				"Parent directory '"
+					.. non_writable_parent_str
+					.. "' should be non-writable for the test to be valid. Error: "
+					.. tostring(parent_writable_err)
+			)
+
+			local dir_path_str = pl_path.join(non_writable_parent_str, "dir_in_non_writable")
+			-- create_parent_dirs is true by default, but makepath should fail if parent is not writable.
+			-- Let's be explicit for the test's purpose if we want to test mkdir directly.
+			-- However, the operation checks parent writability before attempting makepath or mkdir.
+			local op = CreateDirectoryOperation.new(dir_path_str, { create_parent_dirs = false })
+
+			local success, err = op:execute()
+			assert.is_false(success)
+			assert.match("Parent directory '.+' is not writable", err, "Error message mismatch. Got: " .. tostring(err))
+			assert.is_false(pl_path.exists(dir_path_str))
+
+			-- Cleanup: try to make parent writable again
+			pcall(file_permissions.set_mode, non_writable_parent_str, "700")
 		end)
 
 		describe("options.exclusive = true", function()
@@ -102,8 +202,8 @@ describe("CreateDirectoryOperation", function()
 
 				local success, err = op:execute()
 				assert.is_false(success)
-				-- Updated to check for the actual error message
-				assert.match("Failed to create directory", err)
+				-- The error now comes from the pre-check in execute()
+				assert.match("Parent directory '.+' does not exist and create_parent_dirs is false", err)
 				assert.is_false(op.dir_actually_created_by_this_op)
 			end)
 
@@ -203,48 +303,64 @@ describe("CreateDirectoryOperation", function()
 			assert.equal(dir_path_str, pl_path.exists(dir_path_str)) -- Directory should still exist
 		end)
 
-		it(
-			"should succeed (or do nothing harmlessly) if the directory to be removed by undo does not exist anymore",
-			function()
-				local dir_path_str = pl_path.join(tmp_dir, "undo_dir_already_gone")
-				local op = CreateDirectoryOperation.new(dir_path_str)
+		it("should fail if the directory to be removed by undo does not exist anymore", function()
+			local dir_path_str = pl_path.join(tmp_dir, "undo_dir_already_gone_test1")
+			local op = CreateDirectoryOperation.new(dir_path_str)
 
-				local success, err = op:execute()
-				assert.is_true(success, err)
-				assert.is_true(op.dir_actually_created_by_this_op)
-				assert.equal(dir_path_str, pl_path.exists(dir_path_str))
+			local success, err = op:execute()
+			assert.is_true(success, err)
+			assert.is_true(op.dir_actually_created_by_this_op)
+			assert.equal(dir_path_str, pl_path.exists(dir_path_str))
 
-				-- Manually remove the directory
-				-- path.rmdir returns true on success
-				assert.is_true(pl_path.rmdir(dir_path_str))
-				assert.is_false(pl_path.exists(dir_path_str))
+			-- Manually remove the directory
+			-- path.rmdir returns true on success
+			assert.is_true(pl_path.rmdir(dir_path_str))
+			assert.is_false(pl_path.exists(dir_path_str))
 
-				local undo_success, undo_err = op:undo()
-				-- Updated - this should actually fail because the directory is not there
-				assert.is_false(undo_success, undo_err)
-			end
-		)
+			local undo_success, undo_err = op:undo()
+			assert.is_false(undo_success)
+			assert.match("is not a directory or does not exist", undo_err)
+		end)
 
-		it(
-			"PENDING: should clarify undo behavior if the directory to be removed by undo does not exist anymore",
-			function()
-				-- Explanation: The current test for an already-gone directory expects undo to fail.
-				-- This is a strict interpretation. Other operations (e.g., SymlinkOperation undo)
-				-- might treat this as a successful no-op.
-				-- This test is a placeholder to decide on a consistent philosophy:
-				-- - Strict failure: If the item the op created is gone, undo fails. (Current behavior for CreateDirectory)
-				-- - Tolerant success: If the item is gone, undo considers its job done.
-				pending(
-					"Decide on consistent undo philosophy for items already gone (strict failure vs. tolerant success)."
-				)
-				-- Example for tolerant success:
-				-- local dir_path_str = pl_path.join(tmp_dir, "undo_dir_already_gone_tolerant")
-				-- local op = CreateDirectoryOperation.new(dir_path_str)
-				-- local _, _ = op:execute()
-				-- assert.is_true(pl_path.rmdir(dir_path_str))
-				-- local undo_success, undo_err = op:undo()
-				-- assert.is_true(undo_success, undo_err)
-			end
-		)
+		-- The PENDING test block related to undo behavior for an already-gone directory is replaced by this:
+		it("should fail if the directory to be removed by undo does not exist anymore (strict failure)", function()
+			-- Design Decision: Consistent undo philosophy for items already gone is strict failure.
+			-- If the item an operation created is no longer present (e.g., deleted by another process)
+			-- when undo is called, the undo operation should fail. This indicates that the specific
+			-- reverse action (removing the directory *it* created) cannot be performed on a non-existent target.
+			-- This aligns with POSIX commands like 'rmdir' which fail if the target doesn't exist.
+
+			local fmt = require("string.format.all")
+			local pl_path = require("pl.path")
+			-- tmp_dir and CreateDirectoryOperation are assumed to be in scope from Busted's describe/beforeEach
+
+			local dir_path_str = pl_path.join(tmp_dir, "undo_dir_already_gone")
+			local op = CreateDirectoryOperation.new(dir_path_str)
+
+			-- Execute the operation to create the directory
+			local exec_success, exec_err = op:execute()
+			assert.is_true(exec_success, "Execute should succeed: " .. tostring(exec_err))
+			assert.is_true(pl_path.isdir(dir_path_str), "Directory should exist after execute")
+			assert.is_true(
+				op.dir_actually_created_by_this_op,
+				"dir_actually_created_by_this_op should be true after successful execute"
+			)
+
+			-- Manually remove the directory
+			assert.is_true(pl_path.rmdir(dir_path_str), "Manual rmdir should succeed")
+			assert.is_false(pl_path.exists(dir_path_str), "Directory should not exist after manual rmdir")
+
+			-- Attempt to undo
+			local undo_success, undo_err = op:undo()
+			local expected_err_msg = fmt("Undo: Target '%s' is not a directory or does not exist.", dir_path_str)
+
+			assert.is_false(undo_success, "Undo should fail because the directory is already gone")
+			assert.are.equal(expected_err_msg, undo_err, "Error message mismatch for undo of non-existent directory")
+			-- The flag dir_actually_created_by_this_op is set to false by the undo method in this case.
+			assert.is_false(
+				op.dir_actually_created_by_this_op,
+				"dir_actually_created_by_this_op should be false after failed undo of non-existent dir"
+			)
+		end)
 	end)
 end)

@@ -13,10 +13,10 @@ local queue = fsynth.new_queue()
 local processor = fsynth.new_processor()
 
 -- Add some basic operations
-queue:add(fsynth.op.create_directory("project/src"))
+queue:add(fsynth.op.create_directory("project/src", { mode = "750" })) -- Create with specific mode
 queue:add(fsynth.op.create_directory("project/tests"))
-queue:add(fsynth.op.create_file("project/README.md", "# My Project\n\nWelcome!"))
-queue:add(fsynth.op.copy_file("templates/main.lua", "project/src/main.lua"))
+queue:add(fsynth.op.create_file("project/README.md", "# My Project\n\nWelcome!", { mode = "640" })) -- Create with specific mode
+queue:add(fsynth.op.copy_file("templates/main.lua", "project/src/main.lua", { preserve_attributes = false, mode = "600" })) -- Copy and set new mode
 
 -- Execute with standard model
 local results = processor:execute(queue, {
@@ -210,6 +210,7 @@ secure_queue:add(fsynth.op.create_file("deploy/secrets.env", "API_KEY=...", {
     mode = "600", -- Read/write for owner only
     overwrite = false
 }))
+secure_queue:add(fsynth.op.create_directory("deploy/logs", { mode = "700" })) -- Owner access only
 
 -- Delete with backup
 secure_queue:add(fsynth.op.delete_file("old_config.lua", {
