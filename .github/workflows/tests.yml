@@ -31,8 +31,8 @@ jobs:
         id: cache-lua-deps
         uses: actions/cache@v3
         with:
-          path: .luarocks
-          key: ${{ runner.os }}-luarocks-${{ hashFiles('fsynth-0.1.0-1.rockspec') }}
+          path: ~/.luarocks # Corrected path for where --local installs
+          key: ${{ runner.os }}-luarocks-${{ hashFiles('fsynth-0.1.0-1.rockspec') }}-${{ hashFiles('.github/workflows/tests.yml') }} # Added workflow hash to key
           restore-keys: |
             ${{ runner.os }}-luarocks-
 
@@ -43,7 +43,9 @@ jobs:
         if: steps.cache-lua-deps.outputs.cache-hit != 'true'
         run: |
           luarocks install --local --only-deps fsynth-0.1.0-1.rockspec
-
+      - name: Install Busted (test dependency)
+        run: |
+          luarocks install --local busted
       - name: Run tests
         env:
           LUAROCKS_LOCAL: true
