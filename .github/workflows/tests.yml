@@ -43,6 +43,7 @@ jobs:
         if: steps.cache-lua-deps.outputs.cache-hit != 'true'
         run: |
           luarocks install --local --only-deps fsynth-0.1.0-1.rockspec
+      # on maocs, bustes comes with luarocks, but not on ubuntu:
       - name: Install Busted (test dependency)
         run: |
           luarocks install --local busted
