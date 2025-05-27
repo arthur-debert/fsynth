@@ -26,6 +26,9 @@ jobs:
         run: |
           sudo apt-get update
           xargs -a .github/apt-packages.txt sudo apt-get install -y --no-install-recommends
+          # Clean up apt cache to prevent tar permission errors during cache save
+          sudo rm -f /var/cache/apt/archives/lock
+          sudo rm -rf /var/cache/apt/archives/partial/*
 
       - name: Cache Lua dependencies
         id: cache-lua-deps
