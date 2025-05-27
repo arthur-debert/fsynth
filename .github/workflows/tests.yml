@@ -13,40 +13,38 @@ jobs:
     steps:
       - uses: actions/checkout@v3
 
-      - name: Cache OS dependencies
-        id: cache-os-deps
-        uses: actions/cache@v3
-        with:
-          path: /var/cache/apt/archives
-          key: ${{ runner.os }}-apt-${{ hashFiles('.github/workflows/tests.yml') }}
-          restore-keys: |
-            ${{ runner.os }}-apt-
+#      - name: Cache OS dependencies
+#        id: cache-os-deps
+#        uses: actions/cache@v3
+#        with:
+#          path: /var/cache/apt/archives
+#          key: ${{ runner.os }}-apt-${{ hashFiles('.github/workflows/tests.yml') }} # Temporarily using .github/apt-packages.txt for key later
+#          restore-keys: |
+#            ${{ runner.os }}-apt-
 
       - name: Install OS dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y lua5.4 luarocks direnv
+          xargs -a .github/apt-packages.txt sudo apt-get install -y --no-install-recommends
 
-      - name: Cache Lua dependencies
-        id: cache-lua-deps
-        uses: actions/cache@v3
-        with:
-          path: ~/.luarocks # Corrected path for where --local installs
-          key: ${{ runner.os }}-luarocks-${{ hashFiles('fsynth-0.1.0-1.rockspec') }}-${{ hashFiles('.github/workflows/tests.yml') }} # Added workflow hash to key
-          restore-keys: |
-            ${{ runner.os }}-luarocks-
+#      - name: Cache Lua dependencies
+#        id: cache-lua-deps
+#        uses: actions/cache@v3
+#        with:
+#          path: ~/.luarocks # Corrected path for where --local installs
+#          key: ${{ runner.os }}-luarocks-${{ hashFiles('fsynth-0.1.0-1.rockspec') }}-${{ hashFiles('.github/workflows/tests.yml') }} # Temporarily disabling, will use only rockspec hash later
+#          restore-keys: |
+#            ${{ runner.os }}-luarocks-
 
       - name: print me
         run: |
           pwd ; ls -lah
       - name: Install Lua dependencies
-        if: steps.cache-lua-deps.outputs.cache-hit != 'true'
+        # if: steps.cache-lua-deps.outputs.cache-hit != 'true' # Temporarily making unconditional to test apt busted
         run: |
           luarocks install --local --only-deps fsynth-0.1.0-1.rockspec
       # on maocs, bustes comes with luarocks, but not on ubuntu:
-      - name: Install Busted (test dependency)
-        run: |
-          luarocks install --local busted
+      # Busted should now be installed via apt from .github/apt-packages.txt
       - name: Run tests
         env:
           LUAROCKS_LOCAL: true
