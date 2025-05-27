@@ -19,7 +19,7 @@ install_hook() {
     # Create hooks directory if it doesn't exist
     mkdir -p "$hook_dir"
 
-    # Create the symlink
+    # Create the symlink, in which case the paths is differnt
     if [ -e "$hook_path" ]; then
         if [ -L "$hook_path" ]; then
             echo "Removing existing pre-commit hook symlink..."
