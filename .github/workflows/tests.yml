@@ -13,34 +13,34 @@ jobs:
     steps:
       - uses: actions/checkout@v3
 
-#      - name: Cache OS dependencies
-#        id: cache-os-deps
-#        uses: actions/cache@v3
-#        with:
-#          path: /var/cache/apt/archives
-#          key: ${{ runner.os }}-apt-${{ hashFiles('.github/workflows/tests.yml') }} # Temporarily using .github/apt-packages.txt for key later
-#          restore-keys: |
-#            ${{ runner.os }}-apt-
+      - name: Cache OS dependencies
+        id: cache-os-deps
+        uses: actions/cache@v3
+        with:
+          path: /var/cache/apt/archives
+          key: ${{ runner.os }}-apt-${{ hashFiles('.github/apt-packages.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-apt-
 
       - name: Install OS dependencies
         run: |
           sudo apt-get update
           xargs -a .github/apt-packages.txt sudo apt-get install -y --no-install-recommends
 
-#      - name: Cache Lua dependencies
-#        id: cache-lua-deps
-#        uses: actions/cache@v3
-#        with:
-#          path: ~/.luarocks # Corrected path for where --local installs
-#          key: ${{ runner.os }}-luarocks-${{ hashFiles('fsynth-0.1.0-1.rockspec') }}-${{ hashFiles('.github/workflows/tests.yml') }} # Temporarily disabling, will use only rockspec hash later
-#          restore-keys: |
-#            ${{ runner.os }}-luarocks-
+      - name: Cache Lua dependencies
+        id: cache-lua-deps
+        uses: actions/cache@v3
+        with:
+          path: ~/.luarocks # Corrected path for where --local installs
+          key: ${{ runner.os }}-luarocks-${{ hashFiles('fsynth-0.1.0-1.rockspec') }}
+          restore-keys: |
+            ${{ runner.os }}-luarocks-
 
       - name: print me
         run: |
           pwd ; ls -lah
       - name: Install Lua dependencies
-        # if: steps.cache-lua-deps.outputs.cache-hit != 'true' # Temporarily making unconditional to test apt busted
+        if: steps.cache-lua-deps.outputs.cache-hit != 'true'
         run: |
           luarocks install --local --only-deps fsynth-0.1.0-1.rockspec
       # on maocs, bustes comes with luarocks, but not on ubuntu:
