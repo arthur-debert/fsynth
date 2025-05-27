@@ -17,7 +17,7 @@ jobs:
         id: cache-os-deps
         uses: actions/cache@v3
         with:
-          path: /var/cache/apt/archives
+          path: /var/cache/apt/archives/*.deb
           key: ${{ runner.os }}-apt-${{ hashFiles('.github/apt-packages.txt') }}
           restore-keys: |
             ${{ runner.os }}-apt-
@@ -26,9 +26,11 @@ jobs:
         run: |
           sudo apt-get update
           xargs -a .github/apt-packages.txt sudo apt-get install -y --no-install-recommends
+          # Fix permissions for caching
+          sudo chmod -R 777 /var/cache/apt/archives/
           # Clean up apt cache to prevent tar permission errors during cache save
           sudo rm -f /var/cache/apt/archives/lock
-          sudo rm -rf /var/cache/apt/archives/partial/*
+          sudo rm -rf /var/cache/apt/archives/partial
 
       - name: Cache Lua dependencies
         id: cache-lua-deps
