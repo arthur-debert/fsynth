@@ -53,7 +53,9 @@ main() {
     # Run tests
     echo "Running tests..."
     # shellcheck disable=SC1091
-    source "${PROJECT_ROOT}/.envrc"
+    GIT_ROOT=$(git rev-parse --show-toplevel)
+    # shellcheck disable=SC1090
+    source "${GIT_ROOT}/.envrc"
     if ! busted; then
         echo "❌ Tests failed. Commit aborted."
         exit 1
