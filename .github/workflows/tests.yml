@@ -13,24 +13,26 @@ jobs:
     steps:
       - uses: actions/checkout@v3
 
+      - name: Create apt cache directory
+        run: |
+          sudo mkdir -p /tmp/apt-cache
+          sudo chmod 777 /tmp/apt-cache
+
       - name: Cache OS dependencies
         id: cache-os-deps
         uses: actions/cache@v3
         with:
-          path: /var/cache/apt/archives/*.deb
-          key: ${{ runner.os }}-apt-${{ hashFiles('.github/apt-packages.txt') }}
+          path: /tmp/apt-cache
+          key: ${{ runner.os }}-apt-cache-${{ hashFiles('.github/apt-packages.txt') }}
           restore-keys: |
-            ${{ runner.os }}-apt-
+            ${{ runner.os }}-apt-cache-
 
       - name: Install OS dependencies
         run: |
+          # Configure apt to use our cache directory
+          echo "Dir::Cache::Archives /tmp/apt-cache;" | sudo tee -a /etc/apt/apt.conf.d/01cache
           sudo apt-get update
           xargs -a .github/apt-packages.txt sudo apt-get install -y --no-install-recommends
-          # Fix permissions for caching
-          sudo chmod -R 777 /var/cache/apt/archives/
-          # Clean up apt cache to prevent tar permission errors during cache save
-          sudo rm -f /var/cache/apt/archives/lock
-          sudo rm -rf /var/cache/apt/archives/partial
 
       - name: Cache Lua dependencies
         id: cache-lua-deps
