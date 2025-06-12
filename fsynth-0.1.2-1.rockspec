@@ -2,39 +2,53 @@ rockspec_format = "3.0"
 package = "fsynth"
 version = "0.1.2-1"
 source = {
-	url = "https://github.com/arthur-debert/fsynth.lua"
+	url = "git://github.com/arthur-debert/fsynth",
 }
+-- The 'source' attribute is omitted for local development. This allows using
+-- `luarocks make` to build and install from the local source files.
+-- The 'source' attribute should be added back when publishing the package.
 description = {
 	summary = "Synthetic filesystem for isolated operations",
 	detailed = [[
-      Fsynth provides a synthetic filesystem abstraction to isolate and queue 
-      filesystem operations for batch execution. The primary goal is to separate 
-      planning from execution, allowing most of the codebase to remain functional 
+      Fsynth provides a synthetic filesystem abstraction to isolate and queue
+      filesystem operations for batch execution. The primary goal is to separate
+      planning from execution, allowing most of the codebase to remain functional
       and side-effect free.
    ]],
-	homepage = "https://github.com/arthur-debert/fsynth.lua",
+	homepage = "https://github.com/arthur-debert/fsynth",
 	license = "MIT",
 }
 dependencies = {
 	"lua >= 5.1",
 	"penlight >= 1.14.0",
-	"log.lua >= 0.1.0",
-	"luacov >= 0.16.0-1 ",
+	"lual >= 1.0.11",
 	"string-format-all >= 0.2.0", -- Package name uses hyphens, but require() uses dots
 }
 test_dependencies = {
 	"busted >= 2.0.0",
+	"luacov >= 0.16.0-1 ",
 }
 build = {
 	type = "builtin",
-	install = {
-		lua = {
-			["fsynth"] = "lua/fsynth",
-		},
+	copy_directories = { "lua" },
+	modules = {
+		["fsynth"] = "lua/fsynth/init.lua",
+		["fsynth.api"] = "lua/fsynth/api.lua",
+		["fsynth.checksum"] = "lua/fsynth/checksum.lua",
+		["fsynth.file_permissions"] = "lua/fsynth/file_permissions.lua",
+		["fsynth.logging"] = "lua/fsynth/logging.lua",
+		["fsynth.operation_base"] = "lua/fsynth/operation_base.lua",
+		["fsynth.processor"] = "lua/fsynth/processor.lua",
+		["fsynth.queue"] = "lua/fsynth/queue.lua",
+		["fsynth.operations.copy_file"] = "lua/fsynth/operations/copy_file.lua",
+		["fsynth.operations.create_directory"] = "lua/fsynth/operations/create_directory.lua",
+		["fsynth.operations.create_file"] = "lua/fsynth/operations/create_file.lua",
+		["fsynth.operations.delete"] = "lua/fsynth/operations/delete.lua",
+		["fsynth.operations.move"] = "lua/fsynth/operations/move.lua",
+		["fsynth.operations.symlink"] = "lua/fsynth/operations/symlink.lua",
 	},
 }
 test = {
 	type = "busted",
 	-- Additional test configuration can go here
 }
-

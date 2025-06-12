@@ -2,11 +2,11 @@
 local CopyFileOperation = require("fsynth.operations.copy_file")
 local pl_file = require("pl.file")
 local pl_path = require("pl.path")
-local pl_dir = require("pl.dir") -- Added for makepath
+local pl_dir = require("pl.dir")                            -- Added for makepath
 local helper = require("spec.spec_helper")
 local file_permissions = require("fsynth.file_permissions") -- Added
--- always use the log module, no prints
-local log = require("fsynth.logging")
+-- always use the logger module, no prints
+local logger = require("lual").logger()
 
 local is_windows = pl_path.sep == "\\\\" -- Added
 
@@ -21,12 +21,12 @@ local function create_test_file(path, content, mode)
 	if mode and not is_windows then -- On windows, set_mode might result in different get_mode (e.g. 777 -> 666)
 		local actual_mode, _ = file_permissions.get_mode(path)
 		if actual_mode ~= mode then
-			log.warn("Helper create_test_file: mode set to %s but got %s for %s", mode, actual_mode, path)
+			logger.warn("Helper create_test_file: mode set to %s but got %s for %s", mode, actual_mode, path)
 		end
 	elseif mode and is_windows then -- check for 444 or 666
 		local actual_mode, _ = file_permissions.get_mode(path)
 		if (mode == "444" and actual_mode ~= "444") or (mode ~= "444" and actual_mode ~= "666") then
-			log.warn("Helper create_test_file (Win): mode set to %s but got %s for %s", mode, actual_mode, path)
+			logger.warn("Helper create_test_file (Win): mode set to %s but got %s for %s", mode, actual_mode, path)
 		end
 	end
 	return path
@@ -119,18 +119,18 @@ describe("CopyFileOperation", function()
 		local target = tmp_dir .. "/target.txt"
 		local content = "Test content for copying"
 
-		log.info("TEST: Creating source file at %s", source)
+		logger.info("TEST: Creating source file at %s", source)
 		-- Create source file
 		local file = io.open(source, "w")
 		file:write(content)
 		file:close()
 
-		log.info("TEST: Creating CopyFileOperation with overwrite=true")
+		logger.info("TEST: Creating CopyFileOperation with overwrite=true")
 		local op = CopyFileOperation.new(source, target, { overwrite = true })
 
-		log.info("TEST: Validating operation")
+		logger.info("TEST: Validating operation")
 		local valid, err = op:validate()
-		log.info("TEST: Validation result: %s %s", valid, err)
+		logger.info("TEST: Validation result: %s %s", valid, err)
 		assert.is_true(valid, "Validation failed: " .. tostring(err))
 
 		local success = op:execute()
@@ -300,9 +300,9 @@ describe("CopyFileOperation", function()
 			assert.is_false(
 				parent_writable,
 				"Parent directory '"
-					.. non_writable_target_parent_str
-					.. "' should be non-writable for the test to be valid. Error: "
-					.. tostring(parent_writable_err)
+				.. non_writable_target_parent_str
+				.. "' should be non-writable for the test to be valid. Error: "
+				.. tostring(parent_writable_err)
 			)
 
 			local target_path = pl_path.join(non_writable_target_parent_str, "target.txt")
@@ -482,7 +482,7 @@ describe("CopyFileOperation", function()
 		local op = CopyFileOperation.new(source_file, target_parent_dir, { overwrite = false })
 		local valid, err_v = op:validate()
 		-- Validation might pass if it only checks the directory itself, execute must fail.
-		-- Based on current CopyFileOperation:validate, it will log and proceed.
+		-- Based on current CopyFileOperation:validate, it will logger and proceed.
 		assert.is_true(valid, "Validation failed unexpectedly: " .. tostring(err_v))
 
 		local success, err_e = op:execute()

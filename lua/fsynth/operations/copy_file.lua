@@ -1,6 +1,6 @@
 local Operation = require("fsynth.operation_base")
 local Checksum = require("fsynth.checksum")
-local log = require("fsynth.logging")
+local logger = require("lual").logger()
 local pl_path = require("pl.path")
 local pl_dir = require("pl.dir")
 local fmt = require("string.format.all")
@@ -56,24 +56,24 @@ function CopyFileOperation.new(source_path, target_path, options)
 end
 
 function CopyFileOperation:validate()
-	log.debug("CopyFileOperation:validate called")
+	logger.debug("CopyFileOperation:validate called")
 	if not self.source then
-		log.warn("Source path not specified")
+		logger.warn("Source path not specified")
 		return false, "Source path not specified for CopyFileOperation"
 	end
 	if not self.target then
-		log.warn("Target path not specified")
+		logger.warn("Target path not specified")
 		return false, "Target path not specified for CopyFileOperation"
 	end
 
 	-- Verify source
-	log.debug("Checking if source exists: %s", self.source)
+	logger.debug("Checking if source exists: %s", self.source)
 	-- Updated: Check if source is a directory
 	if pl_path.isdir(self.source) then
 		return false, fmt("Source path ('{}') is a directory, not a file.", self.source)
 	end
 	local source_exists = pl_path.isfile(self.source)
-	log.debug("Source exists? %s", source_exists)
+	logger.debug("Source exists? %s", source_exists)
 	if not source_exists then
 		return false, fmt("Source path ('{}') is not a file or does not exist.", self.source)
 	end
@@ -93,10 +93,10 @@ function CopyFileOperation:validate()
 	local original_checksum = self.checksum_data.source_checksum
 	-- Use the initial value for validation
 	self.checksum_data.source_checksum = self.checksum_data.initial_source_checksum
-	log.debug("Comparing initial checksum: %s", self.checksum_data.initial_source_checksum)
+	logger.debug("Comparing initial checksum: %s", self.checksum_data.initial_source_checksum)
 
 	local checksum_ok, checksum_err = self:checksum() -- This will compare current against initial_source_checksum
-	log.debug("Checksum validation result: %s, %s", checksum_ok, checksum_err)
+	logger.debug("Checksum validation result: %s, %s", checksum_ok, checksum_err)
 
 	-- Restore the original value after validation
 	self.checksum_data.source_checksum = original_checksum
@@ -110,7 +110,7 @@ function CopyFileOperation:validate()
 		if pl_path.isdir(self.target) then
 			-- If target is a directory, we will copy into it.
 			-- The actual target path will be checked in execute() or if a file with the same name exists.
-			log.debug("Target path ('{}') is a directory. Will attempt to copy into it.", self.target)
+			logger.debug("Target path ('{}') is a directory. Will attempt to copy into it.", self.target)
 		elseif not self.options.overwrite then
 			return false, fmt("Target file ('{}') exists and overwrite is false.", self.target)
 		end
@@ -126,20 +126,21 @@ function CopyFileOperation:validate()
 
 	return true
 end
+
 function CopyFileOperation:execute()
-	log.info("CopyFileOperation:execute called for %s to %s", self.source, self.target)
+	logger.info("CopyFileOperation:execute called for %s to %s", self.source, self.target)
 	local ok, err_msg
 	local actual_target_path = self.target
 
 	-- Handle if target is a directory
 	if pl_path.isdir(self.target) then
 		actual_target_path = pl_path.join(self.target, pl_path.basename(self.source))
-		log.info("Target is a directory. Actual target path set to: %s", actual_target_path)
+		logger.info("Target is a directory. Actual target path set to: %s", actual_target_path)
 
 		-- If the file now exists in the directory and overwrite is false, fail
 		if pl_path.exists(actual_target_path) and not self.options.overwrite then
 			err_msg = fmt("Target file '{}' exists in directory and overwrite is false.", actual_target_path)
-			log.error(err_msg)
+			logger.error(err_msg)
 			return false, err_msg
 		end
 	end
@@ -155,12 +156,12 @@ function CopyFileOperation:execute()
 		if not writable then
 			err_msg =
 				fmt("Target parent dir '{}' not writable. Error: {}", target_parent_dir_path, write_err or "denied")
-			log.error(err_msg)
+			logger.error(err_msg)
 			return false, err_msg
 		end
 	elseif not self.options.create_parent_dirs then
 		err_msg = fmt("Target parent dir '{}' not found " .. "and create_parent_dirs is false.", target_parent_dir_path)
-		log.error(err_msg)
+		logger.error(err_msg)
 		return false, err_msg
 	end
 	-- If target_parent_dir_path does not exist but create_parent_dirs is true, makepath will handle it.
@@ -183,46 +184,46 @@ function CopyFileOperation:execute()
 	-- pl_file.copy in Penlight should handle overwriting if the target file exists.
 
 	-- Copy File
-	log.info("Attempting to copy %s to %s", self.source, actual_target_path)
+	logger.info("Attempting to copy %s to %s", self.source, actual_target_path)
 	ok, err_msg = pcall(function()
 		-- Use our custom copy function that preserves attributes based on platform
-		log.debug(
+		logger.debug(
 			"Using file_permissions.copy_with_attributes with preserve_attributes=%s",
 			self.options.preserve_attributes
 		)
 		local result =
 			file_permissions.copy_with_attributes(self.source, actual_target_path, self.options.preserve_attributes)
-		log.debug("copy_with_attributes result: %s", result)
+		logger.debug("copy_with_attributes result: %s", result)
 		return result
 	end)
-	log.debug("pcall result: %s, type: %s", ok, type(err_msg))
+	logger.debug("pcall result: %s, type: %s", ok, type(err_msg))
 
 	if not ok then
-		log.error("pcall failed: %s", err_msg)
+		logger.error("pcall failed: %s", err_msg)
 		return false,
 			fmt("Failed to copy file from '{}' to '{}': {}", self.source, actual_target_path, tostring(err_msg))
 	end
 	if type(err_msg) ~= "boolean" or err_msg == false then
-		log.error("pl_file.copy returned non-success: %s, %s", type(err_msg), err_msg)
+		logger.error("pl_file.copy returned non-success: %s, %s", type(err_msg), err_msg)
 		return false,
 			fmt("Failed to copy file from '{}' to '{}': {}", self.source, actual_target_path, tostring(err_msg))
 	end
 
 	-- Record Target Checksum
-	log.debug("Calculating target checksum for: %s", actual_target_path)
+	logger.debug("Calculating target checksum for: %s", actual_target_path)
 	local new_target_checksum, checksum_target_err = Checksum.calculate_sha256(actual_target_path)
-	log.debug("Target checksum result: %s, %s", new_target_checksum, checksum_target_err)
+	logger.debug("Target checksum result: %s, %s", new_target_checksum, checksum_target_err)
 
 	-- Apply specified permissions if provided
 	if self.options.mode then
-		log.debug("Setting permissions on target file to: %s", self.options.mode)
+		logger.debug("Setting permissions on target file to: %s", self.options.mode)
 		local perm_ok, perm_err = file_permissions.set_mode(actual_target_path, self.options.mode)
 		if not perm_ok then
-			log.warn("Failed to set permissions on target file: %s", perm_err)
+			logger.warn("Failed to set permissions on target file: %s", perm_err)
 		end
 	end
 	if not new_target_checksum then
-		log.error("Failed to calculate target checksum: %s", checksum_target_err)
+		logger.error("Failed to calculate target checksum: %s", checksum_target_err)
 		pcall(function()
 			os.remove(actual_target_path)
 		end)
@@ -235,7 +236,7 @@ function CopyFileOperation:execute()
 	end
 	self.checksum_data.target_checksum = new_target_checksum
 	self.actual_target_path_used_for_execute = actual_target_path
-	log.info("Target checksum stored: %s for path %s", self.checksum_data.target_checksum, actual_target_path)
+	logger.info("Target checksum stored: %s for path %s", self.checksum_data.target_checksum, actual_target_path)
 
 	return true
 end

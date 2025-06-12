@@ -3,3 +3,4 @@ coverage
 luacov.report.out
 luacov.stats.out
 local
+local/*

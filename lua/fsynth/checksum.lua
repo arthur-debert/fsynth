@@ -1,7 +1,7 @@
 -- Simple checksum module for fsynth
 local pl_file = require("pl.file")
--- always use the log module, no prints
-local log = require("fsynth.logging")
+-- always use the logger module, no prints
+local logger = require("lual").logger()
 local fmt = require("string.format.all")
 
 local Checksum = {}
@@ -21,10 +21,10 @@ end
 -- @return string The hexadecimal representation of the checksum, or nil.
 -- @return string An error message if the file cannot be read or processed, otherwise nil.
 function Checksum.calculate_sha256(filepath)
-	log.debug(fmt("Calculating checksum for file: {}", filepath))
+	logger.debug(fmt("Calculating checksum for file: {}", filepath))
 	if not filepath then
 		local err_msg = "Filepath cannot be nil"
-		log.error(err_msg)
+		logger.error(err_msg)
 		return nil, err_msg
 	end
 
@@ -35,13 +35,13 @@ function Checksum.calculate_sha256(filepath)
 		if err then
 			err_msg = fmt("{}: {}", err_msg, tostring(err))
 		end
-		log.error(err_msg)
+		logger.error(err_msg)
 		return nil, err_msg
 	end
 
 	-- Use our simple checksum function
 	local hash_hex = simple_checksum(content)
-	log.debug(fmt("Checksum calculated for {}: {}", filepath, hash_hex))
+	logger.debug(fmt("Checksum calculated for {}: {}", filepath, hash_hex))
 	return hash_hex
 end
 

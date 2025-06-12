@@ -354,7 +354,7 @@ describe("Fsynth API", function()
 			end)
 
 			describe("results object", function()
-				it("should provide detailed execution log", function()
+				it("should provide detailed execution logger", function()
 					local op = create_mock_operation("Op1", true, true)
 					queue:add(op)
 
@@ -362,10 +362,10 @@ describe("Fsynth API", function()
 						dry_run = true,
 					})
 
-					local log = results:get_log()
-					assert.is_table(log)
-					assert.is_true(#log > 0)
-					assert.matches("Starting execution", log[1])
+					local logger = results:get_log()
+					assert.is_table(logger)
+					assert.is_true(#logger > 0)
+					assert.matches("Starting execution", logger[1])
 				end)
 
 				it("should track execution counts correctly", function()
@@ -402,30 +402,30 @@ describe("Fsynth API", function()
 			end)
 
 			describe("logging configuration", function()
-				it("should respect log level configuration", function()
+				it("should respect logger level configuration", function()
 					local op = create_mock_operation("Op1", true, true)
 					queue:add(op)
 
-					local old_level = fsynth.log.level
+					local old_level = fsynth.logger.level
 
 					local results = processor:execute(queue, {
 						log_level = "debug",
 						dry_run = true,
 					})
 
-					-- Log level should be restored after execution
-					assert.equals(old_level, fsynth.log.level)
+					-- logger level should be restored after execution
+					assert.equals(old_level, fsynth.logger.level)
 				end)
 			end)
 		end)
 	end)
 
 	describe("API accessibility", function()
-		it("should provide access to log module", function()
-			assert.is_not_nil(fsynth.log)
-			assert.is_function(fsynth.log.debug)
-			assert.is_function(fsynth.log.info)
-			assert.is_function(fsynth.log.error)
+		it("should provide access to logger module", function()
+			assert.is_not_nil(fsynth.logger)
+			assert.is_function(fsynth.logger.debug)
+			assert.is_function(fsynth.logger.info)
+			assert.is_function(fsynth.logger.error)
 		end)
 
 		it("should provide access to internal components", function()
