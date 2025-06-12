@@ -36,8 +36,9 @@ jobs:
 
       - name: Get latest rockspec filename
         id: get-rockspec
+        env:
+          PKG_NAME: fsynth
         run: |
-          direnv allow
           chmod +x ./bin/lua/get-latest-spec
           ROCKSPEC_FILE=$(./bin/lua/get-latest-spec)
           echo "rockspec_file=$ROCKSPEC_FILE" >> $GITHUB_OUTPUT
