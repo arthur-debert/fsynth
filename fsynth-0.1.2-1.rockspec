@@ -4,9 +4,9 @@ version = "0.1.2-1"
 source = {
 	url = "git://github.com/arthur-debert/fsynth",
 }
--- The 'source' attribute is omitted for local development. This allows using
--- `luarocks make` to build and install from the local source files.
--- The 'source' attribute should be added back when publishing the package.
+-- The 'source' attribute can be omitted for local development if using
+-- `luarocks make` to build and install from local source files.
+-- `luarocks install` requires the 'source' attribute.
 description = {
 	summary = "Synthetic filesystem for isolated operations",
 	detailed = [[
@@ -30,22 +30,10 @@ test_dependencies = {
 }
 build = {
 	type = "builtin",
-	copy_directories = { "lua" },
-	modules = {
-		["fsynth"] = "lua/fsynth/init.lua",
-		["fsynth.api"] = "lua/fsynth/api.lua",
-		["fsynth.checksum"] = "lua/fsynth/checksum.lua",
-		["fsynth.file_permissions"] = "lua/fsynth/file_permissions.lua",
-		["fsynth.logging"] = "lua/fsynth/logging.lua",
-		["fsynth.operation_base"] = "lua/fsynth/operation_base.lua",
-		["fsynth.processor"] = "lua/fsynth/processor.lua",
-		["fsynth.queue"] = "lua/fsynth/queue.lua",
-		["fsynth.operations.copy_file"] = "lua/fsynth/operations/copy_file.lua",
-		["fsynth.operations.create_directory"] = "lua/fsynth/operations/create_directory.lua",
-		["fsynth.operations.create_file"] = "lua/fsynth/operations/create_file.lua",
-		["fsynth.operations.delete"] = "lua/fsynth/operations/delete.lua",
-		["fsynth.operations.move"] = "lua/fsynth/operations/move.lua",
-		["fsynth.operations.symlink"] = "lua/fsynth/operations/symlink.lua",
+	install = {
+		lua = {
+			["fsynth"] = "lua/fsynth",
+		},
 	},
 }
 test = {
