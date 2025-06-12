@@ -2,9 +2,9 @@ name: Run Tests
 
 on:
   push:
-    branches: ['**']
+    branches: ["**"]
   pull_request:
-    branches: ['**']
+    branches: ["**"]
 
 jobs:
   test:
@@ -34,12 +34,22 @@ jobs:
           sudo apt-get update
           xargs -a .github/apt-packages.txt sudo apt-get install -y --no-install-recommends
 
+      - name: Get latest rockspec filename
+        id: get-rockspec
+        env:
+          PKG_NAME: melt
+        run: |
+          chmod +x ./bin/lua/get-latest-spec
+          ROCKSPEC_FILE=$(./bin/lua/get-latest-spec)
+          echo "rockspec_file=$ROCKSPEC_FILE" >> $GITHUB_OUTPUT
+          echo "Using rockspec: $ROCKSPEC_FILE"
+
       - name: Cache Lua dependencies
         id: cache-lua-deps
         uses: actions/cache@v3
         with:
           path: ~/.luarocks # Corrected path for where --local installs
-          key: ${{ runner.os }}-luarocks-${{ hashFiles('fsynth-0.1.0-1.rockspec') }}
+          key: ${{ runner.os }}-luarocks-${{ hashFiles(steps.get-rockspec.outputs.rockspec_file) }}
           restore-keys: |
             ${{ runner.os }}-luarocks-
 
@@ -49,8 +59,8 @@ jobs:
       - name: Install Lua dependencies
         if: steps.cache-lua-deps.outputs.cache-hit != 'true'
         run: |
-          luarocks install --local --only-deps fsynth-0.1.0-1.rockspec
-      # on maocs, bustes comes with luarocks, but not on ubuntu:
+          luarocks install  --tree .luarocks --only-deps ${{ steps.get-rockspec.outputs.rockspec_file }}
+      # on macos, busted comes with luarocks, but not on ubuntu:
       # Busted should now be installed via apt from .github/apt-packages.txt
       - name: Run tests
         env:
