@@ -12,7 +12,7 @@
 #   <spec_file_abs_path> : Absolute path to the rockspec or spec.template file.
 #
 # Output:
-#   - To stdout: The extracted package name (e.g., "lual").
+#   - To stdout: The extracted package name
 #   - To stderr: Error messages if the file is not found or the package name cannot be parsed.
 #
 # Assumptions:

@@ -16,7 +16,7 @@
 #
 # Environment Variables Expected (set by caller, e.g., do-release.sh):
 #   - PROJECT_ROOT    : Absolute path to the project root. The new rockspec file will be created here (CWD).
-#   - PKG_NAME            : The definitive package name for the output rockspec (e.g., "lual").
+#   - PKG_NAME            : The definitive package name for the output rockspec
 #   - FINAL_VERSION       : The definitive semantic version (X.Y.Z, e.g., "0.9.0") for the output rockspec.
 #
 # Called by: releases/do-release.sh

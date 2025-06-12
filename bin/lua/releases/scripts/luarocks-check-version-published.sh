@@ -4,7 +4,7 @@
 # Purpose: Checks if a specific package version (with -1 rockspec revision) is listed as a rockspec on LuaRocks.
 #
 # Usage: ./luarocks-check-version-published.sh <package_name> <semantic_version>
-#   <package_name>      : The name of the package (e.g., "lual").
+#   <package_name>      : The name of the package
 #   <semantic_version>  : The semantic version X.Y.Z (e.g., "0.8.22").
 #
 # Output:

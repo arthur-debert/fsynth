@@ -11,7 +11,7 @@
 #   <rockspec_fileN> : Filename(s) of the rockspec(s) to pack (expected to be in CWD).
 #
 # Environment Variables Expected (set by caller, e.g., do-release.sh):
-#   - PKG_NAME          : The definitive package name (e.g., "lual"). Used to predict the output .src.rock filename.
+#   - PKG_NAME          : The definitive package name . Used to predict the output .src.rock filename.
 #   - FINAL_VERSION     : The definitive semantic version (X.Y.Z, e.g., "0.9.0"). Used to predict output filename.
 #   - CWD should be PROJECT_ROOT, where rockspec files are located and .rock files will be created.
 #

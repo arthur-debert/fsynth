@@ -57,7 +57,7 @@
 #   --gh-release <true|false>     : Control GitHub release creation (default: true). If true, requires 'gh' CLI.
 #
 # Environment Variables Expected:
-#   - PKG_NAME (string)           : REQUIRED. The base package name (e.g., "lual"). This script exports it.
+#   - PKG_NAME (string)           : REQUIRED. The base package name . This script exports it.
 #
 # Environment Variables Set (and exported for use by sub-scripts):
 #   - SCRIPTS_DIR (path)          : Absolute path to the ./releases/scripts/ directory.
