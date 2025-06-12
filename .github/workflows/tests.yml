@@ -36,8 +36,6 @@ jobs:
 
       - name: Get latest rockspec filename
         id: get-rockspec
-        env:
-          PKG_NAME: melt
         run: |
           chmod +x ./bin/lua/get-latest-spec
           ROCKSPEC_FILE=$(./bin/lua/get-latest-spec)
