@@ -1,0 +1,64 @@
+#!/usr/bin/env bash
+#
+# Script: bump-version
+# Purpose: Increments a semantic version string (MAJOR.MINOR.PATCH) based on a specified bump type.
+#          Outputs the new version string to stdout.
+#
+# Usage: ./bump-version <major|minor|patch> <current_version_string>
+#   <major|minor|patch>        : The type of version bump to perform.
+#   <current_version_string> : The current semantic version (e.g., "1.2.3").
+#
+# Example: ./bump-version patch 0.8.8  (Outputs: 0.8.9)
+# Example: ./bump-version minor 0.8.8  (Outputs: 0.9.0)
+#
+# Called by: releases/scripts/manage-version.sh
+# Assumptions:
+#   - Input version string is in valid MAJOR.MINOR.PATCH format.
+#
+set -e
+
+if [ "$#" -ne 2 ]; then
+    echo "Usage: $0 <major|minor|patch> <current_version_string>" >&2
+    echo "Example: $0 patch 0.8.8" >&2
+    exit 1
+fi
+
+BUMP_TYPE="$1"
+CURRENT_VERSION="$2"
+
+# Validate bump type
+case "$BUMP_TYPE" in
+major | minor | patch) ;;
+*)
+    echo "Usage: $0 <major|minor|patch> <current_version_string>" >&2
+    echo "Invalid bump type: $BUMP_TYPE" >&2
+    exit 1
+    ;;
+esac
+
+# Parse version components
+if ! echo "$CURRENT_VERSION" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+    echo "Current version string '$CURRENT_VERSION' must follow semantic versioning: MAJOR.MINOR.PATCH" >&2
+    exit 1
+fi
+
+# Extract major, minor, patch
+MAJOR=$(echo "$CURRENT_VERSION" | cut -d. -f1)
+MINOR=$(echo "$CURRENT_VERSION" | cut -d. -f2)
+PATCH=$(echo "$CURRENT_VERSION" | cut -d. -f3)
+
+# Calculate new version based on bump type
+case "$BUMP_TYPE" in
+major)
+    NEW_VERSION="$((MAJOR + 1)).0.0"
+    ;;
+minor)
+    NEW_VERSION="$MAJOR.$((MINOR + 1)).0"
+    ;;
+patch)
+    NEW_VERSION="$MAJOR.$MINOR.$((PATCH + 1))"
+    ;;
+esac
+
+# Output the new version
+echo "$NEW_VERSION"

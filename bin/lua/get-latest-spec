@@ -1,0 +1,123 @@
+#! /usr/bin/env bash
+
+# This script will find the latest rockspeck in a directory (that is, ,given the highest version number)
+# it recives <package name> <directory path> . where it will search. if those are not passed , it will use $PKG_NAME and cwd
+# for example, in a directory with the following rockspecs:
+#   melt-0.1.0-1.rockspec
+#   melt-0.1.3-1.rockspec
+#   melt-0.10.0-1.rockspec
+#   melt-1.0.0-1.rockspec
+# get-latest-spec melt . will output melt-1.0.0-1.rockspec
+
+# Parse arguments with defaults
+PACKAGE_NAME="${1:-${PKG_NAME}}"
+SEARCH_DIR="${2:-.}"
+
+# Check if package name is provided
+if [ -z "$PACKAGE_NAME" ]; then
+    echo "Error: Package name must be provided either as first argument or via PKG_NAME environment variable" >&2
+    exit 1
+fi
+
+# Check if directory exists
+if [ ! -d "$SEARCH_DIR" ]; then
+    echo "Error: Directory '$SEARCH_DIR' does not exist" >&2
+    exit 1
+fi
+
+# Function to compare two version strings
+# Returns 0 if versions are equal, 1 if v1 > v2, 2 if v1 < v2
+compare_versions() {
+    local v1="$1"
+    local v2="$2"
+
+    # Split versions into arrays by dots
+    IFS='.' read -ra V1_PARTS <<<"$v1"
+    IFS='.' read -ra V2_PARTS <<<"$v2"
+
+    # Find the maximum length to compare all parts
+    local max_len=${#V1_PARTS[@]}
+    if [ ${#V2_PARTS[@]} -gt $max_len ]; then
+        max_len=${#V2_PARTS[@]}
+    fi
+
+    # Compare each part
+    for ((i = 0; i < max_len; i++)); do
+        local part1=${V1_PARTS[i]:-0}
+        local part2=${V2_PARTS[i]:-0}
+
+        # Check if parts are numeric before using numeric comparison
+        if [[ "$part1" =~ ^[0-9]+$ ]] && [[ "$part2" =~ ^[0-9]+$ ]]; then
+            # Both parts are numeric, use numeric comparison
+            if [ "$part1" -gt "$part2" ]; then
+                return 1 # v1 > v2
+            elif [ "$part1" -lt "$part2" ]; then
+                return 2 # v1 < v2
+            fi
+        else
+            # Use string comparison for non-numeric parts
+            if [[ "$part1" > "$part2" ]]; then
+                return 1 # v1 > v2
+            elif [[ "$part1" < "$part2" ]]; then
+                return 2 # v1 < v2
+            fi
+        fi
+    done
+
+    return 0 # versions are equal
+}
+
+# Find all rockspec files for the package
+latest_file=""
+latest_version=""
+
+# Look for files matching pattern: {package}-{version}.rockspec
+for file in "$SEARCH_DIR"/${PACKAGE_NAME}-*.rockspec; do
+    # Check if file exists (glob might not match anything)
+    if [ ! -f "$file" ]; then
+        continue
+    fi
+
+    # Extract filename from path
+    basename_file=$(basename "$file")
+
+    # Extract version from filename: package-version.rockspec
+    # Remove package name and dash prefix, then remove .rockspec suffix
+    version_part="${basename_file#${PACKAGE_NAME}-}"
+    version_with_suffix="${version_part%.rockspec}"
+
+    # Extract just the version part (remove -1 suffix if present)
+    version="${version_with_suffix%-*}"
+
+    # Skip if we couldn't extract a valid version
+    if [ -z "$version" ] || [ "$version" = "$version_part" ]; then
+        continue
+    fi
+
+    # If this is the first valid file, set it as latest
+    if [ -z "$latest_version" ]; then
+        latest_version="$version"
+        latest_file="$basename_file"
+        continue
+    fi
+
+    # Compare with current latest version
+    compare_versions "$version" "$latest_version"
+    case $? in
+    1) # current version > latest version
+        latest_version="$version"
+        latest_file="$basename_file"
+        ;;
+    *) # current version <= latest version, keep existing
+        ;;
+    esac
+done
+
+# Output result
+if [ -n "$latest_file" ]; then
+    echo "$latest_file"
+    exit 0
+else
+    echo "Error: No rockspec files found for package '$PACKAGE_NAME' in directory '$SEARCH_DIR'" >&2
+    exit 1
+fi
