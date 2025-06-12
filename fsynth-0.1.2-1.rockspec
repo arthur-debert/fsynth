@@ -29,7 +29,7 @@ build = {
 	type = "builtin",
 	install = {
 		lua = {
-			["fsynth"] = "fsynth",
+			["fsynth"] = "lua/fsynth",
 		},
 	},
 }

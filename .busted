@@ -1,7 +1,7 @@
 return {
   default = {
-    lpath = "./?.lua;./?/init.lua;./fsynth/?.lua;./fsynth/?/init.lua",
-    ROOT = {"spec"},
+    lpath = "./?.lua;./?/init.lua;./lua/?.lua;./lua/?/init.lua;./fsynth/?.lua;./fsynth/?/init.lua",
+    ROOT = { "spec" },
     pattern = "_spec%.lua$",
     setup = "./spec/init.lua"
   }
