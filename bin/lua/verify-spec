@@ -179,10 +179,10 @@ print('✓ Main module $PKG_NAME imported successfully')
 
 -- Test some critical internal modules that are commonly required
 local test_modules = {
-    '$PKG_NAME.config.defaults',
-    '$PKG_NAME.utils.table', 
-    '$PKG_NAME.pipelines.outputs.console',
-    '$PKG_NAME.levels.init'
+    '$PKG_NAME.operations.copy_file',
+    '$PKG_NAME.operations.create_directory',
+    '$PKG_NAME.operations.delete',
+    '$PKG_NAME.checksum'
 }
 
 for _, module in ipairs(test_modules) do

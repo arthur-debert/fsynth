@@ -3,6 +3,7 @@ package = "fsynth"
 version = "0.1.2-1"
 source = {
 	url = "git://github.com/arthur-debert/fsynth",
+	branch = "pkging"
 }
 -- The 'source' attribute can be omitted for local development if using
 -- `luarocks make` to build and install from local source files.
@@ -32,7 +33,20 @@ build = {
 	type = "builtin",
 	install = {
 		lua = {
-			["fsynth"] = "lua/fsynth",
+			["fsynth.init"] = "lua/fsynth/init.lua",
+			["fsynth.queue"] = "lua/fsynth/queue.lua",
+			["fsynth.processor"] = "lua/fsynth/processor.lua",
+			["fsynth.operation_base"] = "lua/fsynth/operation_base.lua",
+			["fsynth.file_permissions"] = "lua/fsynth/file_permissions.lua",
+			["fsynth.checksum"] = "lua/fsynth/checksum.lua",
+			["fsynth.api"] = "lua/fsynth/api.lua",
+			["fsynth.logging"] = "lua/fsynth/logging.lua",
+			["fsynth.operations.symlink"] = "lua/fsynth/operations/symlink.lua",
+			["fsynth.operations.move"] = "lua/fsynth/operations/move.lua",
+			["fsynth.operations.delete"] = "lua/fsynth/operations/delete.lua",
+			["fsynth.operations.create_file"] = "lua/fsynth/operations/create_file.lua",
+			["fsynth.operations.create_directory"] = "lua/fsynth/operations/create_directory.lua",
+			["fsynth.operations.copy_file"] = "lua/fsynth/operations/copy_file.lua",
 		},
 	},
 }
