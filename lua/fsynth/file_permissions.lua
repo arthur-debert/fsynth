@@ -1,6 +1,6 @@
 -- File permission utilities for fsynth
 -- This module provides platform-independent file permission handling
-local log = require("fsynth.logging")
+local logger = require("lual").logger()
 local fmt = require("string.format.all")
 local lfs = require("lfs")
 local pl_path = require("pl.path") -- For is_writable on Windows directories
@@ -19,14 +19,14 @@ function file_permissions.is_readable(path)
 	if not path or not pl_path.exists(path) then
 		return false, "Path must be provided and exist"
 	end
-	log.debug("Checking readability for %s", path)
+	logger.debug("Checking readability for %s", path)
 	if is_windows then
 		local f, err = io.open(path, "rb")
 		if f then
 			f:close()
 			return true
 		else
-			log.debug("Windows readability check failed for %s: %s", path, err or "unknown error")
+			logger.debug("Windows readability check failed for %s: %s", path, err or "unknown error")
 			return false, err
 		end
 	else -- Unix-like
@@ -54,12 +54,12 @@ function file_permissions.is_writable(path)
 	if not path or not pl_path.exists(path) then
 		return false, "Path must be provided and exist"
 	end
-	log.debug("Checking writability for %s", path)
+	logger.debug("Checking writability for %s", path)
 	if is_windows then
 		local mode = lfs.attributes(path, "mode")
 		if mode == "file" then
 			-- Try to open in append mode. If it succeeds, it's writable.
-			-- Also, check the read-only attribute via existing get_mode logic.
+			-- Also, check the read-only attribute via existing get_mode loggeric.
 			-- A file might be openable in "ab" even if +R if we own it, but generally
 			-- the OS will prevent modification if +R is set by user.
 			-- Let's rely on get_mode's interpretation of read-only for files.
@@ -71,7 +71,7 @@ function file_permissions.is_writable(path)
 					f:close()
 					return true
 				else
-					log.debug("Win file writability (open 'ab') failed for %s: %s", path, err_open or "unknown error")
+					logger.debug("Win file writability (open 'ab') failed for %s: %s", path, err_open or "unknown error")
 					return false, err_open
 				end
 			else
@@ -88,11 +88,11 @@ function file_permissions.is_writable(path)
 				if removed then
 					return true
 				else
-					log.warn("Failed to rm temp write-test file %s: %s", test_filepath, err_remove or "unknown error")
+					logger.warn("Failed to rm temp write-test file %s: %s", test_filepath, err_remove or "unknown error")
 					return false -- Could create but not delete, still problematic
 				end
 			else
-				log.debug("Win dir writability (create temp) failed for %s: %s", path, err_create or "unknown error")
+				logger.debug("Win dir writability (create temp) failed for %s: %s", path, err_create or "unknown error")
 				return false, err_create
 			end
 		else
@@ -121,11 +121,11 @@ function file_permissions.set_mode(path, mode)
 	if not path or not mode then
 		return false, "Path and mode must be provided"
 	end
-	log.debug("Setting file permissions for %s to %s", path, mode)
+	logger.debug("Setting file permissions for %s to %s", path, mode)
 	if is_windows then
 		-- Windows doesn't support full permission sets like Unix
 		-- We'll only implement read-only attribute for Windows
-		log.debug("Full permissions not supported on Windows - only read-only can be set")
+		logger.debug("Full permissions not supported on Windows - only read-only can be set")
 		local first_digit = tonumber(mode:sub(1, 1))
 		local is_readonly = first_digit and first_digit <= 4
 		local attrib_cmd
@@ -134,26 +134,26 @@ function file_permissions.set_mode(path, mode)
 		else
 			attrib_cmd = string.format('attrib -R "%s"', path:gsub("/", "\\"))
 		end
-		log.debug("Executing Windows permission command: %s", attrib_cmd)
+		logger.debug("Executing Windows permission command: %s", attrib_cmd)
 		local success, err_exec, code_exec = os.execute(attrib_cmd)
 
 		if success == true or success == 0 then -- Check for common success indicators
 			-- Verify by checking the attribute (simplified, assumes attrib command works if it exits 0)
 			local current_win_mode, get_mode_err = file_permissions.get_mode(path)
 			if not current_win_mode then
-				log.warn("Set mode: Could not get mode for '%s' after attrib: %s", path, get_mode_err or "unknown")
+				logger.warn("Set mode: Could not get mode for '%s' after attrib: %s", path, get_mode_err or "unknown")
 				-- Proceeding, as attrib command itself reported success
 			elseif (is_readonly and current_win_mode == "444") or (not is_readonly and current_win_mode == "666") then
 				return true -- Verified
 			else
-				log.warn(
+				logger.warn(
 					"Set mode: attrib for '%s' to '%s' (readonly: %s) seemed to succeed, but get_mode returned '%s'",
 					path,
 					mode,
 					tostring(is_readonly),
 					current_win_mode
 				)
-				-- Still return true as os.execute suggested success, but log discrepancy
+				-- Still return true as os.execute suggested success, but logger discrepancy
 				return true
 			end
 			return true
@@ -166,12 +166,12 @@ function file_permissions.set_mode(path, mode)
 			if code_exec then
 				err_msg = err_msg .. " Code: " .. tostring(code_exec)
 			end
-			log.error(err_msg)
+			logger.error(err_msg)
 			return false, err_msg
 		end
 	else -- Unix-like systems
 		local chmod_cmd = string.format('chmod %s "%s"', mode, path)
-		log.debug("Executing chmod command: %s", chmod_cmd)
+		logger.debug("Executing chmod command: %s", chmod_cmd)
 		local exec_status = os.execute(chmod_cmd)
 
 		if exec_status == true or exec_status == 0 then
@@ -179,7 +179,7 @@ function file_permissions.set_mode(path, mode)
 			if new_mode_str == mode then
 				return true
 			else
-				log.warn(
+				logger.warn(
 					"chmod for '%s' to '%s' executed, but get_mode returned '%s' (expected '%s'). Error: %s",
 					path,
 					mode,
@@ -198,7 +198,7 @@ function file_permissions.set_mode(path, mode)
 			end
 		else
 			local err_detail = "os.execute returned " .. tostring(exec_status)
-			log.error("Failed to execute chmod on '%s' to '%s'. Status: %s", path, mode, err_detail)
+			logger.error("Failed to execute chmod on '%s' to '%s'. Status: %s", path, mode, err_detail)
 			return false,
 				fmt("Failed to set permissions on '{}' to '{}'. Command execution failed: {}", path, mode, err_detail)
 		end
@@ -215,7 +215,7 @@ function file_permissions.copy_with_attributes(src, dst, preserve_attributes)
 	if preserve_attributes == nil then
 		preserve_attributes = true
 	end
-	log.debug("Copying file with attributes preservation=%s: %s -> %s", preserve_attributes, src, dst)
+	logger.debug("Copying file with attributes preservation=%s: %s -> %s", preserve_attributes, src, dst)
 	if is_windows then
 		-- On Windows, Penlight already uses CopyFileA which preserves attributes
 		-- Just use the standard Penlight copy function
@@ -224,7 +224,7 @@ function file_permissions.copy_with_attributes(src, dst, preserve_attributes)
 		-- On Unix, use cp with the -p flag to preserve attributes
 		if preserve_attributes then
 			local cmd = string.format('cp -p "%s" "%s"', src, dst)
-			log.debug("Executing copy command: %s", cmd)
+			logger.debug("Executing copy command: %s", cmd)
 			local success = os.execute(cmd)
 			if not success then
 				return false, fmt("Failed to copy file with attributes from '{}' to '{}'", src, dst)
@@ -233,7 +233,7 @@ function file_permissions.copy_with_attributes(src, dst, preserve_attributes)
 		else
 			-- Standard copy without preserving attributes: read content from source and write to destination.
 			-- This ensures the destination file gets default OS permissions, respecting umask.
-			log.debug("Performing non-preserving copy (read/write) for Unix: %s -> %s", src, dst)
+			logger.debug("Performing non-preserving copy (read/write) for Unix: %s -> %s", src, dst)
 			local content, read_err = pl_file.read(src)
 			if not content then -- pl_file.read returns (contents) or (nil, errmsg)
 				return false,
@@ -266,7 +266,7 @@ function file_permissions.move_with_attributes(src, dst)
 		return false, "Source path does not exist: " .. src
 	end
 
-	log.debug("Moving with attributes: %s -> %s", src, dst)
+	logger.debug("Moving with attributes: %s -> %s", src, dst)
 
 	if is_windows then
 		-- Penlight's movefile uses MoveFileA (via alien/FFI) or rename command.
@@ -281,7 +281,7 @@ function file_permissions.move_with_attributes(src, dst)
 		-- when moving within the same filesystem. Across filesystems, it might act
 		-- like cp -p + rm.
 		local cmd = string.format('mv "%s" "%s"', src, dst)
-		log.debug("Executing move command: %s", cmd)
+		logger.debug("Executing move command: %s", cmd)
 		local success, _, exitcode = os.execute(cmd)
 		-- os.execute returns true for success (exit code 0 on some systems),
 		-- or nil/false + error info on others.
@@ -303,7 +303,7 @@ function file_permissions.move_with_attributes(src, dst)
 				if not pl_path.exists(dst) then
 					reason = reason .. " Destination does not exist."
 				end
-				log.error("Move command inconsistency for %s to %s: %s", src, dst, reason)
+				logger.error("Move command inconsistency for %s to %s: %s", src, dst, reason)
 				return false, fmt("Failed to move with mv from '{}' to '{}': {}", src, dst, reason)
 			end
 		else
@@ -313,7 +313,7 @@ function file_permissions.move_with_attributes(src, dst)
 			if type(exitcode) == "number" and exitcode ~= 0 then
 				err_msg = err_msg .. " (exit code " .. exitcode .. ")"
 			end
-			log.error("Move command failed for %s to %s: %s", src, dst, err_msg)
+			logger.error("Move command failed for %s to %s: %s", src, dst, err_msg)
 			return false, fmt("Failed to move with mv from '{}' to '{}': {}", src, dst, err_msg)
 		end
 	end
@@ -350,7 +350,7 @@ function file_permissions.get_mode(path)
 			local err_fmt = "Failed to get file attributes for '%s' (attrib command failed). "
 				.. "Exit: %s, Err: %s, Out: %s"
 			local err_msg = fmt(err_fmt, path, tostring(code_close), tostring(err_close), output or "nil")
-			log.warn(err_msg)
+			logger.warn(err_msg)
 			return nil, err_msg
 		end
 
@@ -358,7 +358,7 @@ function file_permissions.get_mode(path)
 			-- This can happen if the path is valid but attrib doesn't list it (e.g. some system dirs)
 			-- or if the file genuinely has no attributes listed that match 'R'.
 			-- If pl_path.exists was true, assume writable for our simplified model.
-			log.debug("Attrib for '%s' empty output. Assuming not read-only.", path)
+			logger.debug("Attrib for '%s' empty output. Assuming not read-only.", path)
 			return "666"
 		end
 
@@ -378,7 +378,7 @@ function file_permissions.get_mode(path)
 		else
 			return "666" -- Represents writable
 		end
-	else -- Unix-like systems
+	else        -- Unix-like systems
 		local perms_str = lfs.attributes(path, "permissions")
 		if not perms_str then
 			-- lfs.attributes returns nil if path doesn't exist or other errors.

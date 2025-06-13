@@ -1,0 +1,87 @@
+#!/usr/bin/env bash
+# This scripts does smart yet simple search to find a github workflow
+# it does fuzzy matching on both the workflow filename and the workflow name
+# It should be:
+# - Case insensitive
+# - Allow non quoted search, i.e. gh-get-workflow unit tests shoud search for "unit tests"
+# - Filenames have priority over workflow names, that is if I search "test" and
+#   there is a workflow named "test.yaml", that's it. Else it should search for
+#   a workflow named "unit tests.yaml"
+# You can use the $gh workflow list --json id --json path --json name
+# it should output the workflow id and exit non zero if no workflow is found
+# for testing, here are the values present here:
+# gh workflow list --json id --json path --json name
+# [
+#   {
+#     "id": 164428124,
+#     "name": "Run Tests",
+#     "path": ".github/workflows/tests.yml"
+#   },
+#   {
+#     "id": 166063750,
+#     "name": "Build and Test",
+#     "path": ".github/workflows/ubuntu-cache.yml"
+#   }
+# ]
+
+set -euo pipefail
+
+# Join all arguments into a single search term
+search_term="$*"
+
+if [[ -z "$search_term" ]]; then
+    echo "Usage: gh-get-workflow <search terms>" >&2
+    exit 1
+fi
+
+# Convert search term to lowercase for case-insensitive matching
+search_lower=$(echo "$search_term" | tr '[:upper:]' '[:lower:]')
+
+# Get workflow list from GitHub CLI
+workflows_json=$(gh workflow list --json id --json path --json name)
+
+if [[ -z "$workflows_json" || "$workflows_json" == "[]" ]]; then
+    echo "No workflows found in repository" >&2
+    exit 1
+fi
+
+# Function to check if a string contains the search term (case-insensitive fuzzy match)
+contains_search() {
+    local text="$1"
+    local text_lower=$(echo "$text" | tr '[:upper:]' '[:lower:]')
+    [[ "$text_lower" == *"$search_lower"* ]]
+}
+
+# Function to extract filename from path
+get_filename() {
+    local path="$1"
+    basename "$path"
+}
+
+# First pass: Try to match filenames (priority)
+workflow_count=$(echo "$workflows_json" | jq length)
+for ((i = 0; i < workflow_count; i++)); do
+    id=$(echo "$workflows_json" | jq -r ".[$i].id")
+    path=$(echo "$workflows_json" | jq -r ".[$i].path")
+    filename=$(get_filename "$path")
+
+    if contains_search "$filename"; then
+        echo "$id"
+        exit 0
+    fi
+done
+
+# Second pass: Try to match workflow names
+for ((i = 0; i < workflow_count; i++)); do
+    id=$(echo "$workflows_json" | jq -r ".[$i].id")
+    name=$(echo "$workflows_json" | jq -r ".[$i].name")
+
+    if contains_search "$name"; then
+        echo "$id"
+        exit 0
+    fi
+done
+
+# No match found
+echo "No workflow found matching: $search_term" >&2
+exit 1

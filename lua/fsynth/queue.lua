@@ -1,11 +1,11 @@
 -- Efficient queue implementation
--- always use the log module, no prints
-local log = require("fsynth.logging")
+-- always use the logger module, no prints
+local logger = require("lual").logger()
 local fmt = require("string.format.all")
 local Queue = {}
 
 function Queue.new()
-	log.debug(fmt("Creating new queue"))
+	logger.debug(fmt("Creating new queue"))
 	return { front = 1, back = 0, data = {} }
 end
 
@@ -13,13 +13,13 @@ function Queue.enqueue(queue, item)
 	local back = queue.back + 1
 	queue.back = back
 	queue.data[back] = item
-	log.trace(fmt("Enqueued item at position {}, queue size now {}", back, Queue.size(queue)))
+	logger.debug(fmt("Enqueued item at position {}, queue size now {}", back, Queue.size(queue)))
 end
 
 function Queue.dequeue(queue)
 	local front = queue.front
 	if front > queue.back then
-		log.trace(fmt("Attempted to dequeue from empty queue"))
+		logger.debug(fmt("Attempted to dequeue from empty queue"))
 		return nil
 	end
 
@@ -29,12 +29,12 @@ function Queue.dequeue(queue)
 
 	-- Reset indices when queue is empty
 	if queue.front > queue.back then
-		log.trace(fmt("Queue is now empty, resetting indices"))
+		logger.debug(fmt("Queue is now empty, resetting indices"))
 		queue.front = 1
 		queue.back = 0
 	end
 
-	log.trace(fmt("Dequeued item from position {}, queue size now {}", front, Queue.size(queue)))
+	logger.debug(fmt("Dequeued item from position {}, queue size now {}", front, Queue.size(queue)))
 	return value
 end
 
@@ -58,7 +58,7 @@ function Queue.clear(queue)
 	queue.data = {}
 	queue.front = 1
 	queue.back = 0
-	log.debug(fmt("Queue cleared, removed {} items", size))
+	logger.debug(fmt("Queue cleared, removed {} items", size))
 end
 
 return Queue

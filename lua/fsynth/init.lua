@@ -1,10 +1,10 @@
 -- Main entry point for fsynth module
--- always use the log module, no prints
-local log = require("fsynth.logging")
+-- always use the logger module, no prints
+local logger = require("lual").logger()
 local fmt = require("string.format.all")
 
 -- Initialize the module
-log.info(fmt("Initializing fsynth module"))
+logger.info(fmt("Initializing fsynth module"))
 
 -- Load the high-level API
 local api = require("fsynth.api")

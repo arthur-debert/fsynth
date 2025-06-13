@@ -189,7 +189,7 @@ local results = processor:execute(queue, {
 })
 
 -- Check what would happen
-for _, log_entry in ipairs(results:get_log()) do
+for _, log_entry in ipairs(results:get_messages()) do
     print(log_entry)
 end
 ```

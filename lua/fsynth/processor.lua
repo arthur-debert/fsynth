@@ -1,7 +1,7 @@
 -- Operation Queue Processor
 -- Responsible for executing operations in a queue with various execution strategies
 local Queue = require("fsynth.queue")
-local log = require("fsynth.logging")
+local logger = require("lual").logger()
 local fmt = require("string.format.all")
 
 local Processor = {}
@@ -15,13 +15,13 @@ Processor.__index = Processor
 --   transactional: Attempt to rollback completed operations on failure
 --   force: Execute even if validation fails (when used with validate_first)
 function Processor.new(options)
-	log.debug(fmt("Creating new processor with options: {}", options and "some options" or "nil"))
+	logger.debug(fmt("Creating new processor with options: {}", options and "some options" or "nil"))
 	local self = setmetatable({
 		options = options or {},
 		executed = {}, -- For rollback tracking
 		errors = {},
 	}, Processor)
-	log.debug(fmt("Processor created, type: {}, metatable: {}", type(self), getmetatable(self) == Processor))
+	logger.debug(fmt("Processor created, type: {}, metatable: {}", type(self), getmetatable(self) == Processor))
 	return self
 end
 
@@ -30,7 +30,7 @@ end
 --   success: true if all operations succeeded, false otherwise
 --   errors: table of errors encountered during processing
 function Processor:process(queue)
-	log.debug(fmt("Processor:process called, self type: {}", type(self)))
+	logger.debug(fmt("Processor:process called, self type: {}", type(self)))
 	self.executed = {}
 	self.errors = {}
 	-- Optionally validate all operations first
@@ -163,9 +163,9 @@ function Processor:rollback()
 	end
 end
 
--- Format errors for display or logging
+-- Format errors for display or loggerging
 function Processor:format_errors()
-	log.debug(fmt("format_errors called, self type: {}, errors count: {}", type(self), #self.errors))
+	logger.debug(fmt("format_errors called, self type: {}, errors count: {}", type(self), #self.errors))
 	local result = {}
 	for i, err in ipairs(self.errors) do
 		local op_type = err.operation and type(err.operation) or "unknown"

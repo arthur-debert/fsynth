@@ -1,7 +1,7 @@
 -- High-level API for Fsynth
 -- Provides a clean, user-friendly interface over the core components
 
-local log = require("fsynth.logging")
+local logger = require("lual").logger()
 local Queue = require("fsynth.queue")
 local Processor = require("fsynth.processor")
 local fmt = require("string.format.all")
@@ -20,7 +20,7 @@ function OperationQueue.new()
 		_queue = Queue.new(),
 		_operations = {}, -- Keep track of operations for inspection
 	}, OperationQueue)
-	log.debug("Created new OperationQueue")
+	logger.debug("Created new OperationQueue")
 	return self
 end
 
@@ -30,7 +30,7 @@ function OperationQueue:add(operation)
 	end
 	Queue.enqueue(self._queue, operation)
 	table.insert(self._operations, operation)
-	log.trace(fmt("Added {} operation to queue", operation.type or "unknown"))
+	logger.debug(fmt("Added {} operation to queue", operation.type or "unknown"))
 end
 
 function OperationQueue:get_operations()
@@ -45,7 +45,7 @@ end
 function OperationQueue:clear()
 	Queue.clear(self._queue)
 	self._operations = {}
-	log.debug("Cleared operation queue")
+	logger.debug("Cleared operation queue")
 end
 
 function OperationQueue:size()
@@ -66,7 +66,7 @@ function OperationQueue:remove(index)
 		Queue.enqueue(self._queue, op)
 	end
 
-	log.debug(fmt("Removed operation at index {}", index))
+	logger.debug(fmt("Removed operation at index {}", index))
 end
 
 -- Internal method to get the queue for processing
@@ -93,7 +93,7 @@ function Results.new()
 		executed_count = 0,
 		skipped_count = 0,
 		rollback_count = 0,
-		log = {},
+		messages = {},
 	}, Results)
 end
 
@@ -105,8 +105,8 @@ function Results:get_errors()
 	return self.errors
 end
 
-function Results:get_log()
-	return self.log
+function Results:get_messages()
+	return self.messages
 end
 
 function Results:_add_error(operation_index, operation_type, message, severity)
@@ -119,8 +119,8 @@ function Results:_add_error(operation_index, operation_type, message, severity)
 	self.success = false
 end
 
-function Results:_add_log(message)
-	table.insert(self.log, message)
+function Results:_add_message(message)
+	table.insert(self.messages, message)
 end
 
 -- ===========================================================================
@@ -139,16 +139,16 @@ function ProcessorWrapper:execute(queue, config)
 	local model = config.model or "standard"
 	local on_error = config.on_error or "stop"
 	local dry_run = config.dry_run or false
-	local log_level = config.log_level or "info"
+	local logger_level = config.logger_level or "info"
 
-	-- Configure logging level (if supported)
-	local old_level = log.level
-	if log_level then
-		log.level = log_level
+	-- Configure loggerging level (if supported)
+	local old_level = logger.level
+	if logger_level then
+		logger.level = logger_level
 	end
 
 	local results = Results.new()
-	results:_add_log(fmt("Starting execution with model: {}, dry_run: {}", model, dry_run))
+	results:_add_message(fmt("Starting execution with model: {}, dry_run: {}", model, dry_run))
 
 	-- Get a copy of the queue for processing
 	local process_queue = queue:_get_internal_queue()
@@ -165,25 +165,25 @@ function ProcessorWrapper:execute(queue, config)
 
 	-- Handle dry run mode
 	if dry_run then
-		results:_add_log("DRY RUN MODE: Simulating operations without making changes")
+		results:_add_message("DRY RUN MODE: Simulating operations without making changes")
 
 		-- Validate all operations
 		for i, op in ipairs(operations) do
-			results:_add_log(
+			results:_add_message(
 				fmt("Validating operation {}: {} {}", i, op.type or "unknown", op.target or op.source or "")
 			)
 
 			local valid, err = op:validate()
 			if not valid then
 				results:_add_error(i, op.type, err or "Validation failed", "error")
-				results:_add_log(fmt("  Validation failed: {}", err or "unknown error"))
+				results:_add_message(fmt("  Validation failed: {}", err or "unknown error"))
 
 				if model ~= "best_effort" and on_error == "stop" then
-					results:_add_log("Stopping due to validation error")
+					results:_add_message("Stopping due to validation error")
 					break
 				end
 			else
-				results:_add_log("  Validation successful")
+				results:_add_message("  Validation successful")
 				results.executed_count = results.executed_count + 1
 			end
 		end
@@ -210,7 +210,7 @@ function ProcessorWrapper:execute(queue, config)
 					err.error or "Unknown error",
 					"error"
 				)
-				results:_add_log(fmt("Operation {} failed: {}", op_index, err.error or "unknown"))
+				results:_add_message(fmt("Operation {} failed: {}", op_index, err.error or "unknown"))
 			end
 		end
 
@@ -221,11 +221,11 @@ function ProcessorWrapper:execute(queue, config)
 		-- Handle rollback count for transactional mode
 		if model == "transactional" and not success then
 			results.rollback_count = #processor.executed
-			results:_add_log(fmt("Rolled back {} operations", results.rollback_count))
+			results:_add_message(fmt("Rolled back {} operations", results.rollback_count))
 		end
 	end
 
-	results:_add_log(
+	results:_add_message(
 		fmt(
 			"Execution completed. Success: {}, Executed: {}, Errors: {}",
 			results.success,
@@ -234,9 +234,9 @@ function ProcessorWrapper:execute(queue, config)
 		)
 	)
 
-	-- Restore original log level
+	-- Restore original logger level
 	if old_level then
-		log.level = old_level
+		logger.level = old_level
 	end
 
 	return results
@@ -257,7 +257,7 @@ function M.op.copy_file(source_path, target_path, options)
 	local internal_options = {
 		overwrite = options.overwrite,
 		preserve_attributes = options.preserve_attributes, -- Match op option name
-		-- verify_checksum is not directly used by op's core logic in a switchable way
+		-- verify_checksum is not directly used by op's core loggeric in a switchable way
 		-- initial source and final target checksums are always part of the op's lifecycle.
 		create_parent_dirs = options.create_parent_dirs,
 		mode = options.mode,
@@ -325,7 +325,7 @@ function M.op.move_file(source_path, target_path, options)
 
 	local internal_options = {
 		overwrite = options.overwrite,
-		-- verify_checksum is not directly used by op's core logic in a switchable way for files
+		-- verify_checksum is not directly used by op's core loggeric in a switchable way for files
 		-- initial source and final target checksums are always part of the op's lifecycle if applicable.
 		create_parent_dirs = options.create_parent_dirs,
 	}
@@ -380,7 +380,7 @@ function M.new_processor()
 	return ProcessorWrapper.new()
 end
 
--- Export the log module for direct access if needed
-M.log = log
+-- Export the logger module for direct access if needed
+M.logger = logger
 
 return M

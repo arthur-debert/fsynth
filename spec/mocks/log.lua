@@ -2,7 +2,7 @@
 local mock_log = {}
 
 -- Define all the log levels
-local levels = { "trace", "debug", "info", "warn", "error", "fatal" }
+local levels = { "debug", "debug", "info", "warn", "error", "fatal" }
 
 -- Create mock functions for each log level
 for _, level in ipairs(levels) do

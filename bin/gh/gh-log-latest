@@ -1,0 +1,53 @@
+#!/bin/bash
+#
+# gh-log-latest
+#
+# This script shows the logs of the latest GitHub workflow run.
+# It first gets the ID of the latest workflow run using gh-workflow-latest-id
+# and then uses gh run view --log to display the logs of that workflow.
+#
+# Usage: gh-log-latest
+#
+# Dependencies:
+# - GitHub CLI (gh): https://cli.github.com/
+# - gh-workflow-latest-id: Custom script to get the latest workflow ID
+
+set -e
+
+# Check if gh command is available
+if ! command -v gh &> /dev/null; then
+    echo "Error: GitHub CLI (gh) is not installed or not in PATH" >&2
+    echo "Please install it from https://cli.github.com/" >&2
+    exit 1
+fi
+
+# Check if our dependency script is available
+if ! command -v gh-workflow-latest-id &> /dev/null; then
+    if [ -x "$HOME/.config/bin/gh-workflow-latest-id" ]; then
+        # Use the script directly if it's not in PATH
+        WORKFLOW_ID_SCRIPT="$HOME/.config/bin/gh-workflow-latest-id"
+    else
+        echo "Error: gh-workflow-latest-id script not found or not executable" >&2
+        echo "Make sure ~/.config/bin/gh-workflow-latest-id exists and is executable" >&2
+        exit 1
+    fi
+else
+    # Script is in PATH
+    WORKFLOW_ID_SCRIPT="gh-workflow-latest-id"
+fi
+
+# Get the latest workflow run ID
+echo "Getting latest workflow ID..."
+WORKFLOW_ID=$("$WORKFLOW_ID_SCRIPT")
+
+if [ -z "$WORKFLOW_ID" ]; then
+    echo "Error: Failed to get workflow ID" >&2
+    exit 1
+fi
+
+echo "Latest workflow ID: $WORKFLOW_ID"
+echo "Fetching workflow logs..."
+
+# Show the logs of the workflow run
+gh run view "$WORKFLOW_ID" --log
+

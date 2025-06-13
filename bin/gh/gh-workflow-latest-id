@@ -1,0 +1,96 @@
+#!/bin/bash
+#
+# gh-workflow-latest-id
+#
+# This script returns the ID of the latest GitHub workflow run.
+# If no arguments are provided, it returns the overall latest workflow run ID.
+# If arguments are provided, it uses gh-get-workflow to find a specific workflow
+# and returns the latest run ID for that workflow.
+#
+# Usage:
+#   gh-workflow-latest-id                    # Get overall latest workflow run ID
+#   gh-workflow-latest-id <search terms>     # Get latest run ID for specific workflow
+#
+# Dependencies:
+# - GitHub CLI (gh): https://cli.github.com/
+# - jq: https://stedolan.github.io/jq/
+# - gh-get-workflow: Custom script to find workflow by name/filename (for args case)
+
+set -e
+
+# Check if gh command is available
+if ! command -v gh &>/dev/null; then
+    echo "Error: GitHub CLI (gh) is not installed or not in PATH" >&2
+    echo "Please install it from https://cli.github.com/" >&2
+    exit 1
+fi
+
+# Check if jq command is available
+if ! command -v jq &>/dev/null; then
+    echo "Error: jq is not installed or not in PATH" >&2
+    echo "Please install it using your package manager" >&2
+    exit 1
+fi
+
+if [ $# -eq 0 ]; then
+    # No arguments provided - get overall latest workflow run ID
+    result=$(gh run list -L 1 --json databaseId 2>/dev/null)
+
+    # Check if the command succeeded and returned valid data
+    if [ $? -ne 0 ] || [ -z "$result" ]; then
+        echo "Error: Failed to fetch workflow runs or no workflow runs found" >&2
+        echo "Make sure you're in a GitHub repository directory" >&2
+        exit 1
+    fi
+
+    # Extract and return just the ID
+    workflow_id=$(echo "$result" | jq -r '.[0].databaseId // empty')
+
+    if [ -z "$workflow_id" ]; then
+        echo "Error: Could not extract workflow ID from response" >&2
+        exit 1
+    fi
+
+    echo "$workflow_id"
+else
+    # Arguments provided - find specific workflow and get its latest run ID
+    search_terms="$*"
+
+    # Check if gh-get-workflow is available
+    if ! command -v gh-get-workflow &>/dev/null; then
+        # Try to find it in the same directory as this script
+        SCRIPT_DIR="$(dirname "${BASH_SOURCE[0]}")"
+        if [ -x "$SCRIPT_DIR/gh-get-workflow" ]; then
+            GET_WORKFLOW_SCRIPT="$SCRIPT_DIR/gh-get-workflow"
+        else
+            echo "Error: gh-get-workflow script not found or not executable" >&2
+            echo "Make sure gh-get-workflow is in PATH or in the same directory as this script" >&2
+            exit 1
+        fi
+    else
+        GET_WORKFLOW_SCRIPT="gh-get-workflow"
+    fi
+
+    # Find the workflow
+    if ! WORKFLOW_DEF_ID=$("$GET_WORKFLOW_SCRIPT" $search_terms); then
+        echo "Error: No workflow found matching: $search_terms" >&2
+        exit 1
+    fi
+
+    # Get the latest run for this specific workflow
+    result=$(gh run list --workflow "$WORKFLOW_DEF_ID" --limit 1 --json databaseId 2>/dev/null)
+
+    if [ $? -ne 0 ] || [ -z "$result" ]; then
+        echo "Error: Failed to fetch runs for workflow $WORKFLOW_DEF_ID" >&2
+        exit 1
+    fi
+
+    workflow_id=$(echo "$result" | jq -r '.[0].databaseId // empty')
+
+    if [ -z "$workflow_id" ] || [ "$workflow_id" = "null" ]; then
+        echo "Error: No runs found for this workflow" >&2
+        exit 1
+    fi
+
+    echo "$workflow_id"
+fi

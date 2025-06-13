@@ -13,9 +13,9 @@ local queue = fsynth.new_queue()
 local processor = fsynth.new_processor()
 
 -- Add some basic operations
-queue:add(fsynth.op.create_directory("project/src", { mode = "750" })) -- Create with specific mode
+queue:add(fsynth.op.create_directory("project/src", { mode = "750" }))                                                      -- Create with specific mode
 queue:add(fsynth.op.create_directory("project/tests"))
-queue:add(fsynth.op.create_file("project/README.md", "# My Project\n\nWelcome!", { mode = "640" })) -- Create with specific mode
+queue:add(fsynth.op.create_file("project/README.md", "# My Project\n\nWelcome!", { mode = "640" }))                         -- Create with specific mode
 queue:add(fsynth.op.copy_file("templates/main.lua", "project/src/main.lua", { preserve_attributes = false, mode = "600" })) -- Copy and set new mode
 
 -- Execute with standard model
@@ -169,7 +169,7 @@ local dry_results = processor:execute(migration_queue, {
 
 -- Check the log to see what would be done
 print("Dry run log:")
-for _, entry in ipairs(dry_results:get_log()) do
+for _, entry in ipairs(dry_results:get_messages()) do
     print("  " .. entry)
 end
 
@@ -367,40 +367,40 @@ local function deploy_dotfiles(dotfiles_repo, home_dir)
     }))
 
     -- Backup and link shell config files
-    local shell_files = {".bashrc", ".zshrc", ".profile"}
+    local shell_files = { ".bashrc", ".zshrc", ".profile" }
     for _, file in ipairs(shell_files) do
         -- Backup existing file if it exists
         dotfiles_queue:add(fsynth.op.copy_file(home_dir .. "/" .. file,
-                                     backup_dir .. "/" .. file, {
-            skip_if_source_missing = true
-        }))
+            backup_dir .. "/" .. file, {
+                skip_if_source_missing = true
+            }))
 
         -- Create symlink to dotfiles repo
         dotfiles_queue:add(fsynth.op.symlink(dotfiles_repo .. "/shell/" .. file,
-                                   home_dir .. "/" .. file, {
-            overwrite = true
-        }))
+            home_dir .. "/" .. file, {
+                overwrite = true
+            }))
     end
 
     -- Link editor configs
     dotfiles_queue:add(fsynth.op.symlink(dotfiles_repo .. "/vim/.vimrc",
-                               home_dir .. "/.vimrc", {
-        overwrite = true
-    }))
+        home_dir .. "/.vimrc", {
+            overwrite = true
+        }))
     dotfiles_queue:add(fsynth.op.symlink(dotfiles_repo .. "/vim",
-                               home_dir .. "/.vim", {
-        overwrite = true
-    }))
+        home_dir .. "/.vim", {
+            overwrite = true
+        }))
 
     -- Copy and make scripts executable (don't use symlinks for scripts)
     local scripts_dir = dotfiles_repo .. "/scripts"
     local target_bin = home_dir .. "/.local/bin"
 
     dotfiles_queue:add(fsynth.op.copy_file(scripts_dir .. "/update-system.sh",
-                                 target_bin .. "/update-system", {
-        verify_checksum_after = true,
-        preserve_attributes = true
-    }))
+        target_bin .. "/update-system", {
+            verify_checksum_after = true,
+            preserve_attributes = true
+        }))
 
     -- Create a record of deployment
     dotfiles_queue:add(fsynth.op.create_file(home_dir .. "/.dotfiles_info",
@@ -427,11 +427,11 @@ local dry_run_results = dotfiles_proc:execute(dotfiles_queue, {
 
 print("Dry run successful:", dry_run_results:is_success())
 print("Operations that would be performed:")
-for i, entry in ipairs(dry_run_results:get_log()) do
+for i, entry in ipairs(dry_run_results:get_messages()) do
     if i <= 5 then -- Only show first 5 for brevity
         print("  " .. entry)
     elseif i == 6 then
-        print("  ... and " .. (#dry_run_results:get_log() - 5) .. " more operations")
+        print("  ... and " .. (#dry_run_results:get_messages() - 5) .. " more operations")
         break
     end
 end
