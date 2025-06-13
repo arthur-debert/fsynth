@@ -362,10 +362,10 @@ describe("Fsynth API", function()
 						dry_run = true,
 					})
 
-					local logger = results:get_log()
-					assert.is_table(logger)
-					assert.is_true(#logger > 0)
-					assert.matches("Starting execution", logger[1])
+					local messages = results:get_messages()
+					assert.is_table(messages)
+					assert.is_true(#messages > 0)
+					assert.matches("Starting execution", messages[1])
 				end)
 
 				it("should track execution counts correctly", function()

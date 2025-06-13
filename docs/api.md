@@ -240,12 +240,12 @@ results.errors           -- array: List of error objects encountered during exec
 results.executed_count   -- number: Count of operations for which `execute()` was called and considered successful by the processor (or would have been in a dry_run if validation passed).
 results.skipped_count    -- number: (Not currently implemented by the API layer) Count of operations that were skipped for reasons other than error (e.g., conditional execution not met).
 results.rollback_count   -- number: Count of operations that were successfully rolled back in `"transactional"` mode.
-results.log              -- array: Detailed execution log messages collected during processing.
+results.messages         -- array: Detailed execution log messages collected during processing.
 
 -- Methods
 results:is_success()     -- Returns true if `results.success` is true.
 results:get_errors()     -- Returns the array of error objects.
-results:get_log()        -- Returns the execution log array.
+results:get_messages()   -- Returns the execution log messages array.
 ```
 
 #### Error Object Structure

@@ -93,7 +93,7 @@ function Results.new()
 		executed_count = 0,
 		skipped_count = 0,
 		rollback_count = 0,
-		logger = {},
+		messages = {},
 	}, Results)
 end
 
@@ -105,8 +105,8 @@ function Results:get_errors()
 	return self.errors
 end
 
-function Results:get_logger()
-	return self.logger
+function Results:get_messages()
+	return self.messages
 end
 
 function Results:_add_error(operation_index, operation_type, message, severity)
@@ -119,8 +119,8 @@ function Results:_add_error(operation_index, operation_type, message, severity)
 	self.success = false
 end
 
-function Results:_add_logger(message)
-	table.insert(self.logger, message)
+function Results:_add_message(message)
+	table.insert(self.messages, message)
 end
 
 -- ===========================================================================
@@ -148,7 +148,7 @@ function ProcessorWrapper:execute(queue, config)
 	end
 
 	local results = Results.new()
-	results:_add_logger(fmt("Starting execution with model: {}, dry_run: {}", model, dry_run))
+	results:_add_message(fmt("Starting execution with model: {}, dry_run: {}", model, dry_run))
 
 	-- Get a copy of the queue for processing
 	local process_queue = queue:_get_internal_queue()
@@ -165,25 +165,25 @@ function ProcessorWrapper:execute(queue, config)
 
 	-- Handle dry run mode
 	if dry_run then
-		results:_add_logger("DRY RUN MODE: Simulating operations without making changes")
+		results:_add_message("DRY RUN MODE: Simulating operations without making changes")
 
 		-- Validate all operations
 		for i, op in ipairs(operations) do
-			results:_add_logger(
+			results:_add_message(
 				fmt("Validating operation {}: {} {}", i, op.type or "unknown", op.target or op.source or "")
 			)
 
 			local valid, err = op:validate()
 			if not valid then
 				results:_add_error(i, op.type, err or "Validation failed", "error")
-				results:_add_logger(fmt("  Validation failed: {}", err or "unknown error"))
+				results:_add_message(fmt("  Validation failed: {}", err or "unknown error"))
 
 				if model ~= "best_effort" and on_error == "stop" then
-					results:_add_logger("Stopping due to validation error")
+					results:_add_message("Stopping due to validation error")
 					break
 				end
 			else
-				results:_add_logger("  Validation successful")
+				results:_add_message("  Validation successful")
 				results.executed_count = results.executed_count + 1
 			end
 		end
@@ -210,7 +210,7 @@ function ProcessorWrapper:execute(queue, config)
 					err.error or "Unknown error",
 					"error"
 				)
-				results:_add_logger(fmt("Operation {} failed: {}", op_index, err.error or "unknown"))
+				results:_add_message(fmt("Operation {} failed: {}", op_index, err.error or "unknown"))
 			end
 		end
 
@@ -221,11 +221,11 @@ function ProcessorWrapper:execute(queue, config)
 		-- Handle rollback count for transactional mode
 		if model == "transactional" and not success then
 			results.rollback_count = #processor.executed
-			results:_add_logger(fmt("Rolled back {} operations", results.rollback_count))
+			results:_add_message(fmt("Rolled back {} operations", results.rollback_count))
 		end
 	end
 
-	results:_add_logger(
+	results:_add_message(
 		fmt(
 			"Execution completed. Success: {}, Executed: {}, Errors: {}",
 			results.success,
