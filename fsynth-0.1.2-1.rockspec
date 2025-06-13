@@ -3,7 +3,6 @@ package = "fsynth"
 version = "0.1.2-1"
 source = {
 	url = "git://github.com/arthur-debert/fsynth",
-	branch = "pkging"
 }
 -- The 'source' attribute can be omitted for local development if using
 -- `luarocks make` to build and install from local source files.
