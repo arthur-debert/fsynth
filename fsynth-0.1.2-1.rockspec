@@ -22,7 +22,7 @@ description = {
 dependencies = {
 	"lua >= 5.1",
 	"penlight >= 1.14.0",
-	"lual >= 1.0.12",
+	"lual >= 1.0.13",
 	"string-format-all >= 0.2.0", -- Package name uses hyphens, but require() uses dots
 }
 test_dependencies = {

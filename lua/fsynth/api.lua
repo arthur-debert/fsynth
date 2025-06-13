@@ -30,7 +30,7 @@ function OperationQueue:add(operation)
 	end
 	Queue.enqueue(self._queue, operation)
 	table.insert(self._operations, operation)
-	logger.trace(fmt("Added {} operation to queue", operation.type or "unknown"))
+	logger.debug(fmt("Added {} operation to queue", operation.type or "unknown"))
 end
 
 function OperationQueue:get_operations()

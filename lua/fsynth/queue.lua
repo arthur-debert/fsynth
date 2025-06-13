@@ -13,13 +13,13 @@ function Queue.enqueue(queue, item)
 	local back = queue.back + 1
 	queue.back = back
 	queue.data[back] = item
-	logger.trace(fmt("Enqueued item at position {}, queue size now {}", back, Queue.size(queue)))
+	logger.debug(fmt("Enqueued item at position {}, queue size now {}", back, Queue.size(queue)))
 end
 
 function Queue.dequeue(queue)
 	local front = queue.front
 	if front > queue.back then
-		logger.trace(fmt("Attempted to dequeue from empty queue"))
+		logger.debug(fmt("Attempted to dequeue from empty queue"))
 		return nil
 	end
 
@@ -29,12 +29,12 @@ function Queue.dequeue(queue)
 
 	-- Reset indices when queue is empty
 	if queue.front > queue.back then
-		logger.trace(fmt("Queue is now empty, resetting indices"))
+		logger.debug(fmt("Queue is now empty, resetting indices"))
 		queue.front = 1
 		queue.back = 0
 	end
 
-	logger.trace(fmt("Dequeued item from position {}, queue size now {}", front, Queue.size(queue)))
+	logger.debug(fmt("Dequeued item from position {}, queue size now {}", front, Queue.size(queue)))
 	return value
 end
 
