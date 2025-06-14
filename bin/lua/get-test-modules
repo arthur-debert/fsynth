@@ -7,8 +7,8 @@
 
 # Check if directory argument is provided
 if [ $# -eq 0 ]; then
-    echo "Usage: $0 <directory>"
-    echo "Example: $0 lua"
+    echo "Usage: $0 <directory>" >&2
+    echo "Example: $0 lua" >&2
     exit 1
 fi
 
@@ -16,7 +16,7 @@ DIR="$1"
 
 # Check if directory exists
 if [ ! -d "$DIR" ]; then
-    echo "Error: Directory '$DIR' does not exist"
+    echo "Error: Directory '$DIR' does not exist" >&2
     exit 1
 fi
 
