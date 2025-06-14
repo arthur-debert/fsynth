@@ -1,0 +1,39 @@
+#!/bin/bash
+
+# this shell scripts will print all lua modules within a directory passed as an argument.
+# it then gets the module name replacing / for "."
+# for example: lua/mylib/mymod/init.lua -> mylib.mymod.
+# we can test with the lua directory here
+
+# Check if directory argument is provided
+if [ $# -eq 0 ]; then
+    echo "Usage: $0 <directory>"
+    echo "Example: $0 lua"
+    exit 1
+fi
+
+DIR="$1"
+
+# Check if directory exists
+if [ ! -d "$DIR" ]; then
+    echo "Error: Directory '$DIR' does not exist"
+    exit 1
+fi
+
+# Find all .lua files in the directory recursively
+find "$DIR" -name "*.lua" -type f | while read -r file; do
+    # Remove the base directory from the path
+    relative_path="${file#$DIR/}"
+
+    # Convert to module name
+    if [[ "$relative_path" == */init.lua ]]; then
+        # For init.lua files, use the parent directory path
+        module_name=$(dirname "$relative_path" | tr '/' '.')
+    else
+        # For regular .lua files, remove .lua extension and convert / to .
+        module_name=$(echo "$relative_path" | sed 's/\.lua$//' | tr '/' '.')
+    fi
+
+    # Print the module name
+    echo "$module_name"
+done | sort
