@@ -1,0 +1,204 @@
+#!/bin/bash
+
+# This script compares the current rockspec modules with what should be generated
+# and optionally updates the rockspec if they differ.
+# Usage: ./bin/lua/update-specs-modules [--no-update] [rockspec-file]
+
+set -e # Exit on error
+
+# Parse arguments
+NO_UPDATE=false
+ROCKSPEC_FILE=""
+
+for arg in "$@"; do
+    case $arg in
+    --no-update)
+        NO_UPDATE=true
+        shift
+        ;;
+    *)
+        ROCKSPEC_FILE="$arg"
+        shift
+        ;;
+    esac
+done
+
+# Default rockspec file (find the first .rockspec file if not specified)
+if [ -z "$ROCKSPEC_FILE" ]; then
+    ROCKSPEC_FILE="$(find . -maxdepth 1 -name "*.rockspec" | head -1)"
+fi
+
+if [ -z "$ROCKSPEC_FILE" ] || [ ! -f "$ROCKSPEC_FILE" ]; then
+    echo "Error: No rockspec file found or specified" >&2
+    echo "Usage: $0 [--no-update] [rockspec-file]" >&2
+    exit 1
+fi
+
+echo "Using rockspec: $ROCKSPEC_FILE"
+
+# Create temporary files
+TEMP_CURRENT=$(mktemp)
+TEMP_GENERATED=$(mktemp)
+TEMP_CURRENT_CLEAN=$(mktemp)
+TEMP_GENERATED_CLEAN=$(mktemp)
+TEMP_NEW_ROCKSPEC=$(mktemp)
+TEMP_BEFORE_MODULES=$(mktemp)
+TEMP_AFTER_MODULES=$(mktemp)
+
+# Clean up on exit
+cleanup() {
+    rm -f "$TEMP_CURRENT" "$TEMP_GENERATED" "$TEMP_CURRENT_CLEAN" "$TEMP_GENERATED_CLEAN" "$TEMP_NEW_ROCKSPEC" "$TEMP_BEFORE_MODULES" "$TEMP_AFTER_MODULES"
+}
+trap cleanup EXIT
+
+# Extract current modules section from rockspec
+extract_modules_section() {
+    awk '
+    /modules = {/ { 
+        in_modules = 1
+        brace_count = 1
+        print "modules = {"
+        next
+    }
+    in_modules {
+        # Count braces to handle nested structures
+        for (i = 1; i <= length($0); i++) {
+            char = substr($0, i, 1)
+            if (char == "{") brace_count++
+            if (char == "}") brace_count--
+        }
+        
+        if (brace_count > 0) {
+            print $0
+        } else {
+            print "}"
+            exit
+        }
+    }
+    ' "$ROCKSPEC_FILE" >"$TEMP_CURRENT"
+}
+
+# Clean modules section (remove comments, extra whitespace, sort)
+clean_modules_section() {
+    local input_file="$1"
+    local output_file="$2"
+
+    # Remove comments and clean up formatting, then sort
+    grep -v "^[[:space:]]*--" "$input_file" |
+        grep -v "^[[:space:]]*$" |
+        grep -E '^\s*\[.*\]\s*=.*,$|^modules = \{$|^\}$' |
+        sort -k1,1 >"$output_file"
+}
+
+# Split rockspec into before/after modules sections
+split_rockspec() {
+    # Extract everything before modules section
+    awk '/modules = {/ { exit } { print }' "$ROCKSPEC_FILE" >"$TEMP_BEFORE_MODULES"
+
+    # Extract everything after modules section
+    awk '
+    BEGIN { found_modules = 0; in_modules = 0; brace_count = 0 }
+    /modules = {/ { 
+        found_modules = 1
+        in_modules = 1
+        brace_count = 1
+        next
+    }
+    found_modules && in_modules {
+        for (i = 1; i <= length($0); i++) {
+            char = substr($0, i, 1)
+            if (char == "{") brace_count++
+            if (char == "}") brace_count--
+        }
+        if (brace_count == 0) {
+            in_modules = 0
+        }
+        next
+    }
+    found_modules && !in_modules { print }
+    ' "$ROCKSPEC_FILE" >"$TEMP_AFTER_MODULES"
+}
+
+# Generate new modules section
+generate_modules_section() {
+    ./bin/lua/list-spec-modules lua >"$TEMP_GENERATED"
+}
+
+# Check if list-spec-modules script exists
+if [ ! -x "./bin/lua/list-spec-modules" ]; then
+    echo "Error: ./bin/lua/list-spec-modules script not found or not executable" >&2
+    exit 1
+fi
+
+echo "Extracting current modules from rockspec..."
+extract_modules_section
+
+echo "Generating new modules list..."
+generate_modules_section
+
+echo "Cleaning and sorting both sections for comparison..."
+clean_modules_section "$TEMP_CURRENT" "$TEMP_CURRENT_CLEAN"
+clean_modules_section "$TEMP_GENERATED" "$TEMP_GENERATED_CLEAN"
+
+# Compare the cleaned sections
+if diff -q "$TEMP_CURRENT_CLEAN" "$TEMP_GENERATED_CLEAN" >/dev/null 2>&1; then
+    echo "✓ Modules section is up to date!"
+    exit 0
+fi
+
+echo ""
+echo "📋 Modules section differs from what should be generated:"
+echo "========================================================"
+echo ""
+
+# Show the differences using original (unclean) versions for readability
+echo "Differences (- current, + generated):"
+diff -u "$TEMP_CURRENT" "$TEMP_GENERATED" || true
+
+echo ""
+echo "========================================================"
+echo ""
+
+# If --no-update flag is set, just exit with error code
+if [ "$NO_UPDATE" = true ]; then
+    echo "Modules differ (use without --no-update to update)"
+    exit 1
+fi
+
+# Ask user if they want to update
+read -p "Do you want to update the rockspec with the new modules? (y/N): " -n 1 -r
+echo ""
+
+if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+    echo "Rockspec not updated."
+    exit 1
+fi
+
+echo "Updating rockspec..."
+
+# Split the original rockspec
+split_rockspec
+
+# Reconstruct the rockspec with new modules
+{
+    cat "$TEMP_BEFORE_MODULES"
+    cat "$TEMP_GENERATED"
+    cat "$TEMP_AFTER_MODULES"
+} >"$TEMP_NEW_ROCKSPEC"
+
+# Backup original and replace
+cp "$ROCKSPEC_FILE" "$ROCKSPEC_FILE.backup"
+mv "$TEMP_NEW_ROCKSPEC" "$ROCKSPEC_FILE"
+
+echo "✓ Rockspec updated successfully!"
+echo "  Original backed up as: $ROCKSPEC_FILE.backup"
+
+# Validate the updated rockspec
+echo "Validating updated rockspec..."
+if luarocks lint "$ROCKSPEC_FILE" >/dev/null 2>&1; then
+    echo "✓ Updated rockspec passes validation!"
+else
+    echo "⚠️  Warning: Updated rockspec failed validation"
+    echo "   You may want to check the syntax manually"
+    exit 1
+fi

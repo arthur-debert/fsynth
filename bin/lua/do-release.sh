@@ -7,35 +7,31 @@
 # High-Level Execution Flow:
 #   1. Setup: Defines paths, exports key variables (PKG_NAME, PROJECT_ROOT, SCRIPTS_DIR, FINAL_VERSION).
 #             PKG_NAME must be set in the environment before running.
-#   2. Argument Parsing: Handles command-line flags for dry runs, versioning, upload options, and GitHub releases.
+#   2. Argument Parsing: Handles command-line flags for dry runs, versioning, upload options, GitHub releases,
+#                        and the required rockspec file.
 #   3. GitHub CLI Check: If GitHub release creation is enabled, verifies 'gh' CLI is available.
-#   4. Initial Version: Determines the source for metadata (user-provided .rockspec or default spec.template)
-#                      and reads the INITIAL_SEMANTIC_VERSION from it using 'read-version-from-spec.sh'.
+#   4. Initial Version: Reads the INITIAL_SEMANTIC_VERSION from the provided rockspec using 'read-version-from-spec.sh'.
 #   5. Final Version Calculation: Calls 'manage-version.sh' with INITIAL_SEMANTIC_VERSION and bump/use-current options
 #                               to determine and export FINAL_VERSION.
-#   6. Template Update (if applicable): If using spec.template and version changed, updates it with FINAL_VERSION
-#                                   using 'update-spec-version.sh'.
-#   7. Rockspec Generation: Generates the final, buildable <PKG_NAME>-<FINAL_VERSION>-1.rockspec
-#                           using 'gen-rockspecs.sh', taking either the user-provided spec or the
-#                           (potentially updated) spec.template as input.
-#   8. Pre-flight LuaRocks Check: Verifies if <PKG_NAME> v<FINAL_VERSION> is already on LuaRocks
+#   6. Rockspec Generation: Generates the final, buildable <PKG_NAME>-<FINAL_VERSION>-1.rockspec
+#                           using 'gen-rockspecs.sh', taking the provided rockspec as input.
+#   7. Pre-flight LuaRocks Check: Verifies if <PKG_NAME> v<FINAL_VERSION> is already on LuaRocks
 #                                using 'luarocks-check-version-published.sh'. Exits if already published.
-#   9. Build/Pack Rock: Builds (packs) the .src.rock file from the generated rockspec using 'build-rocks.sh'.
+#   8. Build/Pack Rock: Builds (packs) the .src.rock file from the generated rockspec using 'build-rocks.sh'.
 #                       This also serves as a validation of the rockspec.
-#  10. Commit & Tag: Commits relevant files (e.g., generated rockspec, possibly updated spec.template)
-#                    and creates/pushes a Git tag (v<FINAL_VERSION>) using 'commit-and-tag-release.sh'.
-#  11. Publish to LuaRocks: Uploads the .rockspec or .rock file to LuaRocks using 'publish-to-luarocks.sh'.
+#   9. Commit & Tag: Commits the generated rockspec and creates/pushes a Git tag (v<FINAL_VERSION>)
+#                    using 'commit-and-tag-release.sh'.
+#  10. Publish to LuaRocks: Uploads the .rockspec or .rock file to LuaRocks using 'publish-to-luarocks.sh'.
 #                           Captures the LuaRocks module URL if successful.
-#  12. Verify on LuaRocks: Confirms the package is findable on LuaRocks using 'luarocks-check-version-published.sh'.
-#  13. GitHub Release (if enabled): Creates a GitHub release for the tag, attaching rockspec and .src.rock as assets,
+#  11. Verify on LuaRocks: Confirms the package is findable on LuaRocks using 'luarocks-check-version-published.sh'.
+#  12. GitHub Release (if enabled): Creates a GitHub release for the tag, attaching rockspec and .src.rock as assets,
 #                                using 'create-gh-release.sh'.
-#  14. Cleanup: Removes intermediate .src.rock files if the .rockspec was uploaded (and not a dry run).
-#  15. Completion Message: Prints final success, including LuaRocks URL.
+#  13. Cleanup: Removes intermediate .src.rock files if the .rockspec was uploaded (and not a dry run).
+#  14. Completion Message: Prints final success, including LuaRocks URL.
 #
-# Scripts Called (from $SCRIPTS_DIR, i.e., ./releases/scripts/):
+# Scripts Called (from $SCRIPTS_DIR, i.e., ./scripts/):
 #   - read-version-from-spec.sh
 #   - manage-version.sh
-#   - update-spec-version.sh
 #   - gen-rockspecs.sh
 #   - luarocks-check-version-published.sh
 #   - build-rocks.sh
@@ -44,25 +40,23 @@
 #   - create-gh-release.sh
 #
 # Command-line Options:
-#   [path/to/your.rockspec]       : Optional. If provided, this rockspec is used as the source for versioning
-#                                   and as a base for the final generated rockspec. It is NOT modified directly.
-#   --dry-run                     : Simulate most actions. Some file modifications (like spec.template update)
-#                                   might still occur if not carefully handled by sub-scripts. Git pushes,
-#                                   LuaRocks uploads, and GitHub releases are skipped or simulated.
-#   --use-version-file            : Use the version found in the source spec/template without prompting for a bump.
+#   <path/to/your.rockspec>       : REQUIRED. The rockspec file to use as the source for versioning
+#                                   and as a base for the final generated rockspec.
+#   --dry-run                     : Simulate most actions. Git pushes, LuaRocks uploads, and GitHub releases
+#                                   are skipped or simulated.
+#   --use-version-file            : Use the version found in the source rockspec without prompting for a bump.
 #                                   Cannot be used with --bump.
-#   --bump <patch|minor|major>    : Automatically bump the version from the source spec/template by the specified part.
+#   --bump <patch|minor|major>    : Automatically bump the version from the source rockspec by the specified part.
 #                                   Cannot be used with --use-version-file.
 #   --upload-rock                 : Upload the packed .src.rock file to LuaRocks instead of the .rockspec file.
 #   --gh-release <true|false>     : Control GitHub release creation (default: true). If true, requires 'gh' CLI.
 #
 # Environment Variables Expected:
-#   - PKG_NAME (string)           : REQUIRED. The base package name . This script exports it.
+#   - PKG_NAME (string)           : REQUIRED. The base package name. This script exports it.
 #
 # Environment Variables Set (and exported for use by sub-scripts):
-#   - SCRIPTS_DIR (path)          : Absolute path to the ./releases/scripts/ directory.
-#   - PROJECT_ROOT (path)     : Absolute path to the project root.
-#   - DEFAULT_SPEC_TEMPLATE_ABS (path): Absolute path to releases/spec.template.
+#   - SCRIPTS_DIR (path)          : Absolute path to the ./scripts/ directory.
+#   - PROJECT_ROOT (path)         : Absolute path to the project root.
 #   - FINAL_VERSION (string)      : The determined semantic version (e.g., "0.9.0") for the release.
 #   - PKG_NAME (string)           : (Re-exported from initial environment variable).
 #
@@ -76,7 +70,6 @@ set -e
 # --- Path and Variable Definitions ---
 RELEASES_ROOT=$(dirname "$(readlink -f "$0")")
 export SCRIPTS_DIR="$RELEASES_ROOT/scripts"
-export DEFAULT_SPEC_TEMPLATE_ABS="$RELEASES_ROOT/spec.template" # Renamed from SPEC_TEMPLATE_ABS for clarity
 
 if [ -z "$PROJECT_ROOT" ]; then
     print_error "PROJECT_ROOT environment variable not set. This is required."
@@ -102,18 +95,18 @@ if [ -z "$PKG_NAME" ]; then print_error "PKG_NAME environment variable not set. 
 export PKG_NAME
 print_status "Using PKG_NAME: $PKG_NAME (from environment)"
 
-# --- Argument Parsing for flags and optional rockspec file ---
+# --- Argument Parsing for flags and required rockspec file ---
 DRY_RUN_FLAG=""
 VERSION_ACTION_ARG=""
 BUMP_TYPE_ARG=""
 UPLOAD_ROCK_FILE_FLAG=false
-USER_PROVIDED_ROCKSPEC_PATH=""
+ROCKSPEC_PATH=""
 CREATE_GH_RELEASE=true # Default to true
 
 NEW_ARGS=()
 for arg in "$@"; do
-    if [[ -f "$arg" && "$arg" == *.rockspec && -z "$USER_PROVIDED_ROCKSPEC_PATH" ]]; then
-        USER_PROVIDED_ROCKSPEC_PATH=$(readlink -f "$arg")
+    if [[ -f "$arg" && "$arg" == *.rockspec && -z "$ROCKSPEC_PATH" ]]; then
+        ROCKSPEC_PATH=$(readlink -f "$arg")
     else
         NEW_ARGS+=("$arg")
     fi
@@ -124,13 +117,13 @@ while [[ "$#" -gt 0 ]]; do
     case $1 in
     --dry-run)
         DRY_RUN_FLAG="--dry-run"
-        print_warning "DRY RUN MODE (Note: spec.template may still be modified if version is bumped)"
+        print_warning "DRY RUN MODE"
         shift
         ;;
     --use-version-file)
         if [ -n "$VERSION_ACTION_ARG" ]; then print_error "--use-version-file and --bump cannot be used together."; fi
         VERSION_ACTION_ARG="--use-current"
-        print_status "Using version from source spec file."
+        print_status "Using version from source rockspec file."
         shift
         ;;
     --bump)
@@ -163,6 +156,15 @@ while [[ "$#" -gt 0 ]]; do
     esac
 done
 
+# --- Validate required rockspec argument ---
+if [ -z "$ROCKSPEC_PATH" ]; then
+    print_error "A rockspec file is required as an argument.\\nUsage: $0 [options] <path/to/your.rockspec>"
+fi
+if [ ! -f "$ROCKSPEC_PATH" ]; then
+    print_error "Rockspec file not found: $ROCKSPEC_PATH"
+fi
+print_status "Using rockspec: $ROCKSPEC_PATH"
+
 # --- GH CLI Check (if GitHub release is enabled) ---
 if [ "$CREATE_GH_RELEASE" = true ]; then
     if ! command -v gh &>/dev/null; then
@@ -173,86 +175,25 @@ if [ "$CREATE_GH_RELEASE" = true ]; then
     echo # Newline for readability
 fi
 
-# --- Determine METADATA_SOURCE_FILE (for reading initial Pkg Name and Version) ---
-METADATA_SOURCE_FILE_ABS=""
-if [ -n "$USER_PROVIDED_ROCKSPEC_PATH" ]; then
-    if [ ! -f "$USER_PROVIDED_ROCKSPEC_PATH" ]; then print_error "Provided rockspec file not found: $USER_PROVIDED_ROCKSPEC_PATH"; fi
-    METADATA_SOURCE_FILE_ABS="$USER_PROVIDED_ROCKSPEC_PATH"
-    print_status "Source for initial metadata: User-provided rockspec ($METADATA_SOURCE_FILE_ABS)"
-else
-    METADATA_SOURCE_FILE_ABS="$DEFAULT_SPEC_TEMPLATE_ABS"
-    print_status "Source for initial metadata: Default spec template ($METADATA_SOURCE_FILE_ABS)"
-fi
-
-# PKG_NAME is from env. Read INITIAL_VERSION from METADATA_SOURCE_FILE_ABS.
-print_status "Reading initial version from $METADATA_SOURCE_FILE_ABS..."
-INITIAL_SEMANTIC_VERSION=$("$SCRIPTS_DIR/read-version-from-spec.sh" "$METADATA_SOURCE_FILE_ABS")
-if [ -z "$INITIAL_SEMANTIC_VERSION" ]; then print_error "Failed to read initial version from $METADATA_SOURCE_FILE_ABS."; fi
+# --- Read Initial Version from Rockspec ---
+print_status "Reading initial version from $ROCKSPEC_PATH..."
+INITIAL_SEMANTIC_VERSION=$("$SCRIPTS_DIR/read-version-from-spec.sh" "$ROCKSPEC_PATH")
+if [ -z "$INITIAL_SEMANTIC_VERSION" ]; then print_error "Failed to read initial version from $ROCKSPEC_PATH."; fi
 print_status "Initial version read: $INITIAL_SEMANTIC_VERSION for package $PKG_NAME"
 
-# --- Step 1: Calculate Final Version (using manage-version.sh as a pure calculator) ---
+# --- Step 1: Calculate Final Version ---
 print_status "Step 1: Calculating final version..."
 export FINAL_VERSION=$("$SCRIPTS_DIR/manage-version.sh" "$INITIAL_SEMANTIC_VERSION" "$SCRIPTS_DIR" $VERSION_ACTION_ARG $BUMP_TYPE_ARG)
 if [ -z "$FINAL_VERSION" ]; then print_error "Failed to determine final version."; fi
 print_success "Final version decided: $FINAL_VERSION for $PKG_NAME"
-
-# --- Step 1b: Update spec.template if it was the source and version was bumped ---
-# This ensures the template carries the next version for subsequent default runs.
-# User-provided rockspecs are NOT modified.
-if [ -z "$USER_PROVIDED_ROCKSPEC_PATH" ] && [ "$INITIAL_SEMANTIC_VERSION" != "$FINAL_VERSION" ]; then
-    print_status "Updating version in default spec template ($DEFAULT_SPEC_TEMPLATE_ABS) to $FINAL_VERSION..."
-    # update-spec-version.sh modifies the file in place.
-    "$SCRIPTS_DIR/update-spec-version.sh" "$DEFAULT_SPEC_TEMPLATE_ABS" "$FINAL_VERSION"
-    print_success "Default spec template updated."
-fi
 echo
 
-# Initialize files to be committed and file used for generation
-declare -a GENERATED_ROCKSPEC_FILES=() # This will hold the single, final rockspec filename for build/publish
-SPEC_TO_COMMIT_PRIMARY=""              # Primary file to commit (template or user-spec)
-SPEC_TO_COMMIT_SECONDARY=""            # Secondary file to commit (generated spec, if template mode)
-SOURCE_FOR_GENSPECS=""                 # The file gen-rockspecs.sh will copy from
-
-if [ -n "$USER_PROVIDED_ROCKSPEC_PATH" ]; then
-    # Mode: User-provided Rockspec File
-    # The user-provided file (unmodified by version bump) is the source for gen-rockspecs.
-    # The final generated rockspec will have the PKG_NAME (from env) and FINAL_VERSION.
-    SOURCE_FOR_GENSPECS="$USER_PROVIDED_ROCKSPEC_PATH"
-    # We commit the original user-provided rockspec (it was not modified).
-    if [[ "$USER_PROVIDED_ROCKSPEC_PATH" == "$PROJECT_ROOT"* ]]; then
-        SPEC_TO_COMMIT_PRIMARY="${USER_PROVIDED_ROCKSPEC_PATH#$PROJECT_ROOT/}"
-    else
-        SPEC_TO_COMMIT_PRIMARY="$USER_PROVIDED_ROCKSPEC_PATH"
-    fi
-else
-    # Mode: Template-based
-    # The default spec template (which was just updated if version bumped) is the source for gen-rockspecs.
-    SOURCE_FOR_GENSPECS="$DEFAULT_SPEC_TEMPLATE_ABS"
-    SPEC_TO_COMMIT_PRIMARY="$(basename "$RELEASES_ROOT")/$(basename "$DEFAULT_SPEC_TEMPLATE_ABS")" # e.g. releases/spec.template
-fi
-
 # --- Step 2: Generate Final Buildable Rockspec ---
-# gen-rockspecs.sh copies SOURCE_FOR_GENSPECS and stamps PKG_NAME & FINAL_VERSION into the new file.
 print_status "Step 2: Generating final buildable rockspec for $PKG_NAME version $FINAL_VERSION..."
-GENERATED_ROCKSPECS_OUTPUT=$("$SCRIPTS_DIR/gen-rockspecs.sh" "$SOURCE_FOR_GENSPECS")
-if [ -z "$GENERATED_ROCKSPECS_OUTPUT" ]; then print_error "Failed to generate final rockspec."; fi
-mapfile -t GENERATED_ROCKSPEC_FILES < <(echo "$GENERATED_ROCKSPECS_OUTPUT") # Should be one file
+GENERATED_ROCKSPEC_OUTPUT=$("$SCRIPTS_DIR/gen-rockspecs.sh" "$ROCKSPEC_PATH")
+if [ -z "$GENERATED_ROCKSPEC_OUTPUT" ]; then print_error "Failed to generate final rockspec."; fi
+mapfile -t GENERATED_ROCKSPEC_FILES < <(echo "$GENERATED_ROCKSPEC_OUTPUT") # Should be one file
 print_success "Final rockspec for build/publish: ${GENERATED_ROCKSPEC_FILES[*]}"
-
-# If template mode, the second file to commit is this newly generated rockspec.
-# If user-provided spec mode, GENERATED_ROCKSPEC_FILES[0] IS the one to build/publish and also commit (if different from original user path due to naming convention)
-# but SPEC_TO_COMMIT_PRIMARY already points to the original user spec path.
-# This logic needs to be cleaner for what to commit if user spec is provided.
-# For now: if template, commit template + generated. If user-spec, commit original user-spec + generated.
-# This seems right if gen-rockspecs always makes a NEW file like <PKG_NAME>-<FINAL_VERSION>-1.rockspec
-if [ -z "$USER_PROVIDED_ROCKSPEC_PATH" ]; then
-    SPEC_TO_COMMIT_SECONDARY="${GENERATED_ROCKSPEC_FILES[0]}"
-elif [ "$(basename "$USER_PROVIDED_ROCKSPEC_PATH")" != "${GENERATED_ROCKSPEC_FILES[0]}" ]; then
-    # User provided a spec, and the generated spec has a different (canonical) name.
-    # We should commit the generated one. The original user one is not modified or committed.
-    SPEC_TO_COMMIT_PRIMARY="${GENERATED_ROCKSPEC_FILES[0]}" # Commit the canonical one.
-    SPEC_TO_COMMIT_SECONDARY=""                             # No secondary in this case.
-fi
 echo
 
 # --- Pre-flight Check ---
@@ -280,16 +221,11 @@ echo
 print_status "Committing and tagging for $PKG_NAME v$FINAL_VERSION..."
 ARGS_FOR_COMMIT=()
 if [ -n "$DRY_RUN_FLAG" ]; then ARGS_FOR_COMMIT+=("$DRY_RUN_FLAG"); fi
-if [ -n "$SPEC_TO_COMMIT_PRIMARY" ]; then ARGS_FOR_COMMIT+=("$SPEC_TO_COMMIT_PRIMARY"); fi
-if [ -n "$SPEC_TO_COMMIT_SECONDARY" ]; then ARGS_FOR_COMMIT+=("$SPEC_TO_COMMIT_SECONDARY"); fi
+ARGS_FOR_COMMIT+=("${GENERATED_ROCKSPEC_FILES[0]}") # Commit the generated rockspec
 
-if [ ${#ARGS_FOR_COMMIT[@]} -eq 0 ] || ([ -n "$DRY_RUN_FLAG" ] && [ ${#ARGS_FOR_COMMIT[@]} -eq 1 ]); then
-    print_warning "No files identified for commit (or only dry-run flag). Skipping commit step."
-else
-    "$SCRIPTS_DIR/commit-and-tag-release.sh" "${ARGS_FOR_COMMIT[@]}"
-    print_success "Committed and tagged."
-    echo
-fi
+"$SCRIPTS_DIR/commit-and-tag-release.sh" "${ARGS_FOR_COMMIT[@]}"
+print_success "Committed and tagged."
+echo
 
 # --- Publish to LuaRocks ---
 print_status "Publishing to LuaRocks..."

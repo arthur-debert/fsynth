@@ -1,0 +1,68 @@
+#!/bin/bash
+
+# This script generates rockspec module mappings for all lua files in a directory.
+# It outputs the proper format for the build.modules section of a rockspec file.
+# Usage: ./bin/lua/list-spec-modules lua
+# Output format: ["module.name"] = "path/to/file.lua",
+# When both foo.lua and foo/init.lua exist, foo.lua takes precedence.
+
+# Check if directory argument is provided
+if [ $# -eq 0 ]; then
+    echo "Usage: $0 <directory>" >&2
+    echo "Example: $0 lua" >&2
+    echo "This will generate rockspec module mappings for all .lua files in the directory" >&2
+    exit 1
+fi
+
+DIR="$1"
+
+# Check if directory exists
+if [ ! -d "$DIR" ]; then
+    echo "Error: Directory '$DIR' does not exist" >&2
+    exit 1
+fi
+
+# Create temporary files to store mappings
+TEMP_ALL=$(mktemp)
+TEMP_STANDALONE=$(mktemp)
+TEMP_INIT=$(mktemp)
+
+# Find all .lua files and categorize them
+find "$DIR" -name "*.lua" -type f | while read -r file; do
+    # Remove the base directory from the path
+    relative_path="${file#$DIR/}"
+
+    # Convert to module name
+    if [[ "$relative_path" == */init.lua ]]; then
+        # For init.lua files, use the parent directory path
+        module_name=$(dirname "$relative_path" | tr '/' '.')
+        echo "$module_name|$file" >>"$TEMP_INIT"
+    else
+        # For regular .lua files, remove .lua extension and convert / to .
+        module_name=$(echo "$relative_path" | sed 's/\.lua$//' | tr '/' '.')
+        echo "$module_name|$file" >>"$TEMP_STANDALONE"
+    fi
+done
+
+# Process standalone files first (they take precedence)
+cat "$TEMP_STANDALONE" >>"$TEMP_ALL"
+
+# Process init files, but only if module name doesn't already exist
+while IFS='|' read -r module_name file_path; do
+    if ! grep -q "^$module_name|" "$TEMP_STANDALONE"; then
+        echo "$module_name|$file_path" >>"$TEMP_ALL"
+    fi
+done <"$TEMP_INIT"
+
+echo "-- Generated module mappings for rockspec"
+echo "modules = {"
+
+# Sort and output the final mappings
+sort "$TEMP_ALL" | while IFS='|' read -r module_name file_path; do
+    echo "   [\"$module_name\"] = \"$file_path\","
+done
+
+echo "}"
+
+# Clean up temporary files
+rm -f "$TEMP_ALL" "$TEMP_STANDALONE" "$TEMP_INIT"
